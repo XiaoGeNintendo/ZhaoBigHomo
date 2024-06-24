@@ -12,4 +12,7 @@ add_executable(real_product Lexer.h
         Lexer.cpp
         ZCompiler.cpp
         FakeAssembly.h
-        FakeAssemblyBuilder.h)
+        FakeAssemblyBuilder.h
+        Expression.cpp
+        Expression.h
+)

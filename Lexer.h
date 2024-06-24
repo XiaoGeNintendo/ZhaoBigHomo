@@ -38,10 +38,36 @@ struct Token{
         return type==ano.type && value==ano.value;
     }
 };
+inline bool isop(int c) {
+    static const set<char> operators = {
+            '+', '-', '*', '/', '%', '=', ';', '?', ':', '>', '<', '(', ')', '{', '}', '!', '&', '|'
+    };
+    return operators.find(c) != operators.end();
+}
 
-inline bool isop(int c){
-    return c=='+' || c=='-' || c=='*' || c=='/' || c=='='
-           || c==';' || c=='?' || c==':' || c=='>' || c=='<' || c=='(' || c==')' || c=='{' || c=='}';
+inline bool isAnyOfAssignment(const string& s) {
+    static const set<string> operators = {
+            "=","+=","-=","*=","/="
+    };
+    return operators.find(s) != operators.end();
+}
+
+inline bool isAnyOfLongLogicalOperation(const string& s){
+    static const set<string> operators = {
+            "&&","||"
+    };
+    return operators.find(s) != operators.end();
+}
+
+inline bool isAnyOfComparator(const string& s){
+    static const set<string> operators = {
+            "==","!=",">=","<="
+    };
+    return operators.find(s) != operators.end();
+
+}
+inline bool isLongOperator(const string& s){
+    return isAnyOfAssignment(s) || isAnyOfLongLogicalOperation(s) | isAnyOfComparator(s);
 }
 
 inline bool isalphaordigit(int c){
@@ -53,8 +79,7 @@ private:
     char next();
     char scry();
     int fw=-2;
-    Token suckedToken;
-    bool sucked;
+    vector<Token> suckedTokens;
     ifstream stream;
 public:
     int line;

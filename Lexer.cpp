@@ -23,22 +23,24 @@ char Lexer::scry(){
 }
 
 void Lexer::suckToken(Token t){
-    assert(!sucked);
-    sucked=true;
-    suckedToken=t;
+    suckedTokens.push_back(t);
 }
 
 Token Lexer::getToken(){
-    if(sucked){
-        sucked=false;
-        return suckedToken;
+    if(!suckedTokens.empty()){
+        auto t=suckedTokens.back();
+        suckedTokens.pop_back();
+        return t;
     }
     string s;
     char c=next();
     if(isop(c)){
-        if(c=='=' && scry()=='='){
+        string largeOp;
+        largeOp+=c;
+        largeOp+=scry();
+        if(isLongOperator(largeOp)){
             next();
-            return {OPERATOR,"=="};
+            return {OPERATOR,largeOp};
         }
         return {OPERATOR,s+c};
     }else if(isdigit(c)){

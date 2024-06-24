@@ -87,6 +87,32 @@ Operation gAdd(int op1, int op2, int to){
 Operation gMinus(int op1, int op2, int to){
     return Operation(5,op1,op2,to);
 }
+
+Operation gMultiply(int op1, int op2, int to){
+    return Operation(6,op1,op2,to);
+}
+Operation gDivide(int op1, int op2, int to){
+    return Operation(7,op1,op2,to);
+}
+Operation gMod(int op1, int op2, int to){
+    return Operation(8,op1,op2,to);
+}
+Operation gEqual(int op1, int op2, int to){
+    return Operation(9,op1,op2,to);
+}
+Operation gGreater(int op1, int op2, int to){
+    return Operation(10,op1,op2,to);
+}
+Operation gSmaller(int op1, int op2, int to){
+    return Operation(11,op1,op2,to);
+}
+Operation gAnd(int op1, int op2, int to){
+    return Operation(12,op1,op2,to);
+}
+Operation gOr(int op1, int op2, int to){
+    return Operation(13,op1,op2,to);
+}
+
 /**
  * Opcode=14. MEM[to]=!MEM[from]
  */

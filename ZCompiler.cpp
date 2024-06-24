@@ -5,7 +5,7 @@
 #include "Lexer.h"
 #include "FakeAssembly.h"
 #include "FakeAssemblyBuilder.h"
-
+#include "Expression.h"
 using namespace std;
 
 #define EXPECTED_BUT_FOUND 11
@@ -54,29 +54,122 @@ map<int,string> modifier;
  * Stack Structure:
  *
  */
-/*
- * Expression priority:
- * ()
- * = += -= *= /= %=
- * -
- * >= <= == > < !=
- * >> <<
- * + -
- * * /
- * ? :
- *
- * 3>5?7:6*5+4>>3
- */
 string currentFunction;
 map<string,int> globalVars;
 map<string,int> localVars;
 map<string,int> localVarCountInFunc;
 
+//============================================================Expression related thingy
+/*
+ * Expression priority:
+ * = += -= *= /= %=
+ * ? :
+ * ||
+ * &&
+ * >= <= == > < !=
+ * + -
+ * unary + -
+ * * /
+ *()
+ * x=3>5?7:-6*5+4>>3
+ * x=3>5?7:-30+4>>3
+ */
+
+void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
+    right->compile(ops,putAt+1);
+
+    int flag=0;
+    if(localVars.count(left)){
+        flag=1;
+        ops.emplace_back(gCopy(STACK_START,putAt+2));
+        ops.emplace_back(gSet(putAt+3,localVars[left]+1));
+        ops.emplace_back(gMinus(putAt+2,putAt+3,putAt+2)); //putAt+2 is now pos
+    }else if(globalVars.count(left)){
+        flag=2;
+        ops.emplace_back(gSet(putAt+2,globalVars[left]+GLOBAL_START));
+    }
+
+    if(flag==0){
+        throwUndefined(left,"assignment expression");
+    }
+
+    if(op.value=="="){
+        ops.emplace_back(gArraySet(putAt+1,0,putAt+2));
+        ops.emplace_back(gCopy(putAt+1,putAt));
+    }else if(op.value=="+="){
+        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
+        ops.emplace_back(gAdd(putAt+1,putAt+3,putAt+3));
+        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
+        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+    }else if(op.value=="-="){
+        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
+        ops.emplace_back(gMinus(putAt+1,putAt+3,putAt+3));
+        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
+        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+    }else if(op.value=="*="){
+        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
+        ops.emplace_back(gMultiply(putAt+1,putAt+3,putAt+3));
+        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
+        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+    }else if(op.value=="/="){
+        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
+        ops.emplace_back(gDivide(putAt+1,putAt+3,putAt+3));
+        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
+        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+    }else if(op.value=="%="){
+        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
+        ops.emplace_back(gMod(putAt+1,putAt+3,putAt+3));
+        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
+        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+    }
+    throwUndefined(op.value,"assignment expression");
+}
+
+ExpressionLayerLogic logics[18];
+
+Expression* compileExpression(int layer, int putAt);
+
+void initExpressionParsingModule(){
+    ExpressionLayerLogic l0=ExpressionLayerLogic(); //= += etc
+    l0.isSpecialLayer=true;
+    l0.specialOp=[](int layer, int putAt)->Expression*{
+        auto first=lexer.getToken();
+        auto second=lexer.scryToken().value;
+        if(isAnyOfAssignment(second)){
+            ensure(first,IDENTIFIER);
+            auto op=lexer.getToken();
+            Expression* right= compileExpression(layer,putAt+1);
+            Expression* assignment=new AssignmentExpression(op,first.value,right);
+            return assignment;
+        }else{
+            //oops seems not an assignment layer
+            lexer.suckToken(first);
+            return compileExpression(layer+1,putAt);
+        }
+    };
+
+    ExpressionLayerLogic l1=ExpressionLayerLogic(); //?:
+    l1.isSpecialLayer=true;
+    l1.specialOp=[](int layer, int putAt)->Expression*{
+        auto first=compileExpression(layer+1,putAt+1);
+        if(lexer.scryToken().value=="?"){
+            lexer.getToken();
+            auto second= compileExpression(layer+1,putAt+2);
+            ensureNext(":");
+            auto third= compileExpression(layer+1,putAt+3);
+
+            return new TrinaryExpression(first,second,third);
+        }else{
+            return first;
+        }
+    };
+}
+
+
+
 
 void compileExpression(){
-    //TODO
-    lexer.getToken();
-    output.emplace_back(gSet(TEMP,114514));
+
 }
 
 bool compileStatement(){
