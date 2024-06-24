@@ -6,11 +6,11 @@
 char Lexer::next(){
 
     while(!(isalpha(fw) || isdigit(fw) || isop(fw) || fw==EOF)){
-        fw=getchar();
+        fw=stream.get();
     }
 
     char t=fw;
-    fw=getchar();
+    fw=stream.get();
     return t;
 }
 
@@ -53,4 +53,14 @@ Token Lexer::getToken(){
     }else if(c==EOF){
         return {ENDOFFILE,""};
     }
+}
+
+void Lexer::open(string file) {
+    stream=ifstream(file);
+}
+
+Token Lexer::scryToken() {
+    auto t=getToken();
+    suckToken(t);
+    return t;
 }

@@ -2,13 +2,8 @@
 // Created by XGN on 2024/6/23.
 //
 #include <bits/stdc++.h>
+#include "FakeAssembly.h"
 using namespace std;
-
-struct Operation{
-    int opcode;
-    int x,y,z;
-    explicit Operation(int opcode=0, int x=0, int y=0, int z=0):opcode(opcode),x(x),y(y),z(z){}
-};
 
 vector<Operation> ops;
 
@@ -19,18 +14,6 @@ inline int read(){
     int x;
     ins>>x;
     return x;
-}
-
-int getOperandCount(int opcode){
-    if(opcode==1 || opcode==2 || 4<=opcode && opcode<=13){
-        return 3;
-    }else if(opcode==0 || opcode==3 || opcode==14 || opcode==20){
-        return 2;
-    }else if(opcode==30 || opcode==40 || opcode==50 || opcode==60){
-        return 1;
-    }
-    cerr<<"Unknown opcode: "<<opcode<<endl;
-    exit(2);
 }
 
 int main(int argc, char** argv){

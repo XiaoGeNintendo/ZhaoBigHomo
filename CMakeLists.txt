@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_executable(fake_asm Lexer.h
         Lexer.cpp
-        FakeAssembly.cpp)
+        FakeAssembly.cpp
+        FakeAssembly.h)
 add_executable(real_product Lexer.h
-        Lexer.cpp)
+        Lexer.cpp
+        ZCompiler.cpp
+        FakeAssembly.h)

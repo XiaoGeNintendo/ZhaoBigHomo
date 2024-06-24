@@ -40,10 +40,13 @@ private:
     int fw=-2;
     Token suckedToken;
     bool sucked;
+    ifstream stream;
 public:
+    void open(string file);
     Token getToken();
     void suckToken(Token t);
+    Token scryToken();
 };
 
-
+const Token EOSToken=Token(OPERATOR,";");
 #endif //ZHAOBIGHOMO_LEXER_H
