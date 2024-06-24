@@ -48,6 +48,7 @@ inline void throwNested(const string& s){
 }
 
 vector<Operation> output;
+map<int,string> modifier;
 
 /*
  * Stack Structure:
@@ -71,6 +72,7 @@ map<string,int> globalVars;
 map<string,int> localVars;
 map<string,int> localVarCountInFunc;
 
+
 void compileExpression(){
     //TODO
     lexer.getToken();
@@ -92,7 +94,10 @@ bool compileStatement(){
             //it's a local variable
             int relativePosition=localVars[secondToken.value];
             output.emplace_back(gInput());
-            output.emplace_back(gArraySet(INPUT_TEMP,0,LOCAL_INDEX_CACHE+relativePosition));
+            output.emplace_back(gCopy(STACK_START,TEMP));
+            output.emplace_back(gSet(TEMP+1,relativePosition));
+            output.emplace_back(gMinus(TEMP,TEMP+1,TEMP));
+            output.emplace_back(gArraySet(INPUT_TEMP,0,TEMP));
         }else if(globalVars.count(secondToken.value)){
             //it's a global variable
             int position=globalVars[secondToken.value];
@@ -164,7 +169,10 @@ bool compileStatement(){
                 output.emplace_back(gCopy(TEMP,GLOBAL_START+globalVars[varName.value]));
             }else{
                 //local variable
-                output.emplace_back(gArraySet(TEMP,0,LOCAL_INDEX_CACHE+localVars[varName.value]));
+                output.emplace_back(gCopy(STACK_START,TEMP+1)); //get stack top
+                output.emplace_back(gSet(TEMP+2,localVars[varName.value]+1));
+                output.emplace_back(gMinus(TEMP+1,TEMP+2,TEMP+1)); //subtract the index
+                output.emplace_back(gArraySet(TEMP,0,TEMP+1)); //set
             }
         }
         ensureNext(";");
@@ -197,31 +205,34 @@ bool compileStatement(){
             localVars["%TEMP"+to_string(i)+"%"]=i;
         }
 
-        output.emplace_back(gJump(-1));
+        output.emplace_back(gJump(-1)); //prepare to jump to initial code first
         int toChange=output.size()-1;
         int backTo=output.size();
 
         compileStatement();
 
         localVarCountInFunc[currentFunction]=localVars.size();
+
+        //make sure the function is properly returned
+        output.emplace_back(gSet(TEMP,0));
+        output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
+        output.emplace_back(gMinus(STACK_START,TEMP+1,STACK_START));
+        output.emplace_back(gJumpMem(STACK_START));
+
+        output[toChange].x=output.size(); //make sure the original code jumps to right place
+        //TODO reserved for more function code?
+        output.emplace_back(gSet(TEMP,localVarCountInFunc[currentFunction]));
+        output.emplace_back(gAdd(STACK_START,TEMP,STACK_START)); //add stack_start by the memory needed
+        output.emplace_back(gJump(backTo)); //jump back
         currentFunction=""; //restore state
-        output[toChange].x=output.size();
-        //time to set up local variables
-        output.emplace_back(gCopy(STACK_START,TEMP));
-        output.emplace_back(gSet(TEMP+1,LOCAL_INDEX_CACHE));
-        for(int i=0;i<localVars.size();i++){
-            output.emplace_back(gArraySet(0,0,TEMP)); //set the value to 0
-            output.emplace_back(gArraySet(TEMP,0,TEMP+1)); //set local index cache
-            output.emplace_back(gAdd(1,TEMP,TEMP));
-            output.emplace_back(gAdd(1,STACK_START,STACK_START));
-            output.emplace_back(gAdd(1,TEMP+1,TEMP+1));
-        }
-        output.emplace_back(gJump(backTo));
     }else if(firstToken.value=="return"){
-        compileExpression();
-        for(int i=0;i<localVarCountInFunc[currentFunction];i++){
-            output.emplace_back(gMinus(STACK_START,1,STACK_START));
+        if(lexer.scryToken().value==";"){
+            output.emplace_back(gSet(TEMP,0));
+        }else {
+            compileExpression();
         }
+        output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
+        output.emplace_back(gMinus(STACK_START,TEMP+1,STACK_START));
         output.emplace_back(gJumpMem(STACK_START));
 
         ensureNext(";");
