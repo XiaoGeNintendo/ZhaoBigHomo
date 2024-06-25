@@ -125,12 +125,13 @@ void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
     }else if(op.value=="%="){
         ops.emplace_back(gArrayGet(TEMP+2,0,TEMP));
         ops.emplace_back(gMod(TEMP+2,TEMP+1,TEMP+1));
+    }else{
+        fail("Iternal Error: Unknown assignment operation "+op.value);
     }
 
     ops.emplace_back(gArraySet(TEMP+1,0,TEMP));
     ops.emplace_back(gSetStack(TEMP+1,putAt));
 
-    throwUndefined(op.value,"assignment expression");
 }
 
 void ValueExpression::compile(vector<Operation> &ops, int putAt) {
