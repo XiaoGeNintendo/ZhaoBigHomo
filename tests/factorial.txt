@@ -1,0 +1,18 @@
+var global_x;
+
+def jiecheng(){
+    if(global_x==1){
+        return 1;
+    }else{
+        var x=global_x;
+        global_x-=1;
+        return jiecheng()*x;
+    }
+}
+
+def main(){
+    input global_x;
+    output jiecheng();
+}
+
+main();

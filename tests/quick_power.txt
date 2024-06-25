@@ -1,0 +1,21 @@
+
+def main(){
+    var a;
+    var b;
+    var mod;
+    var result=1;
+    input a;
+    input b;
+    input mod;
+    while(b>0){
+        if(b%2==1){
+            result=result*a%mod;
+        }
+        a=a*a%mod;
+        b/=2;
+    }
+
+    output result;
+}
+
+main();

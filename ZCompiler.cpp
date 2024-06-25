@@ -234,7 +234,7 @@ void initExpressionParsingModule(){
     ExpressionLayerLogic layerPlusMinus=ExpressionLayerLogic();
     layerPlusMinus.operators={"+","-"};
     ExpressionLayerLogic layerMultipleDivide=ExpressionLayerLogic();
-    layerMultipleDivide.operators={"*","/"};
+    layerMultipleDivide.operators={"*","/","%"};
 
     ExpressionLayerLogic layerUnary=ExpressionLayerLogic();
     layerUnary.isSpecialLayer=true;
