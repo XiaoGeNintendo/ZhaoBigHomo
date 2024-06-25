@@ -27,7 +27,7 @@ const int INPUT_TEMP=4999;
 const int OUTPUT_TEMP=4998;
 const int LOCAL_INDEX_CACHE=3000;
 const int TEMP=100;
-const int TEMP_VAR_COUNT=10;
+const int TEMP_VAR_COUNT=50;
 
 /**
  * Opcode=0 Set the given memory address to the direct value x
