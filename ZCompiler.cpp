@@ -21,6 +21,10 @@ inline void fail(const string& msg,int err=CUSTOM_FAIL){
     exit(err);
 }
 
+inline void warn(const string& msg){
+    cerr<<"Warning: [Line "<<lexer.line<<"] "<<msg<<endl;
+}
+
 inline void ensure(const Token& token, int tokenType){
     if(token.type!=tokenType){
         cerr<<"Error: [Line "<<lexer.line<<"] Expected "<<getTokenTypeDisplay(tokenType)<<" but found "<<getTokenTypeDisplay(token.type)<<endl;
@@ -69,7 +73,10 @@ map<string,int> globalVars;
  */
 map<string,int> localVars;
 map<string,int> localVarCountInFunc;
-
+/**
+ * This map points to the start program line that a function starts.
+ */
+map<string,int> functionPointers;
 //============================================================Expression related thingy
 /*
  * Expression priority:
@@ -136,18 +143,35 @@ void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
 
 void ValueExpression::compile(vector<Operation> &ops, int putAt) {
     if(token.type==INTEGER){
+        if(isFunction){
+            warn("Arrr, a mighty fine notion ye be havin' there to be callin' an integer!");
+        }
         ops.emplace_back(gSet(TEMP,stoi(token.value)));
         ops.emplace_back(gSetStack(TEMP,putAt));
     }else if(token.type==IDENTIFIER){
-        if(globalVars.count(token.value)){
-            int loc=globalVars[token.value];
-            ops.emplace_back(gSetStack(loc+GLOBAL_START,putAt));
-        }else if(localVars.count(token.value)){
-            int loc=localVars[token.value];
-            ops.emplace_back(gGetStack(TEMP,loc));
+        if(isFunction){
+            //call a function
+
+            if(!functionPointers.count(token.value)){
+                throwUndefined(token.value,"value expression (function calling)");
+            }
+
+            int backPos=ops.size()+2;
+            ops.emplace_back(gSet(TEMP,backPos));
+            ops.emplace_back(gJump(functionPointers[token.value]));
             ops.emplace_back(gSetStack(TEMP,putAt));
-        }else{
-            throwUndefined(token.value,"value expression");
+        }else {
+            //just a normal variable
+            if (globalVars.count(token.value)) {
+                int loc = globalVars[token.value];
+                ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
+            } else if (localVars.count(token.value)) {
+                int loc = localVars[token.value];
+                ops.emplace_back(gGetStack(TEMP, loc));
+                ops.emplace_back(gSetStack(TEMP, putAt));
+            } else {
+                throwUndefined(token.value, "value expression");
+            }
         }
     }else{
         fail("Expected INTEGER or IDENTIFIER in value expression",EXPECTED_BUT_FOUND);
@@ -224,7 +248,15 @@ void initExpressionParsingModule(){
             ensureNext(")");
             return res;
         }else{
-            return new ValueExpression(token);
+            bool function=false;
+            if(lexer.scryToken().value=="("){
+                //oh! function calling
+                //TODO parameter function
+                ensureNext("(");
+                ensureNext(")");
+                function=true;
+            }
+            return new ValueExpression(token,function);
         }
     };
 
@@ -344,6 +376,7 @@ bool compileStatement(){
             }
 
             localVars[varName.value]=localVars.size()+1;
+            localVarCountInFunc[currentFunction]=localVars.size();
         }
 
         //give it a default value
@@ -387,26 +420,36 @@ bool compileStatement(){
         for(int i=1;i<=TEMP_VAR_COUNT;i++){
             localVars["%TEMP"+to_string(i)+"%"]=i+1;
         }
+        localVarCountInFunc[currentFunction]=localVars.size();
 
+        output.emplace_back(gJump(-1)); //to prevent the code being executed when just defined
+        int toFinalChange=output.size()-1;
+        functionPointers[currentFunction]=output.size();
         output.emplace_back(gJump(-1)); //prepare to jump to initial code first
         int toChange=output.size()-1;
         int backTo=output.size();
 
         compileStatement();
 
-        localVarCountInFunc[currentFunction]=localVars.size();
 
         //make sure the function is properly returned
+        //same code as the return below. Change both occurrence!!
         output.emplace_back(gSet(TEMP,0));
+        output.emplace_back(gGetStack(TEMP+2,1));
         output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
         output.emplace_back(gMinus(STACK_START,TEMP+1,STACK_START));
-        output.emplace_back(gJumpMem(STACK_START));
+        output.emplace_back(gJumpMem(TEMP+2));
 
         output[toChange].x=output.size(); //make sure the original code jumps to right place
+
+        //function code here
         //TODO reserved for more function code?
-        output.emplace_back(gSet(TEMP,localVarCountInFunc[currentFunction]));
-        output.emplace_back(gAdd(STACK_START,TEMP,STACK_START)); //add stack_start by the memory needed
+        output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
+        output.emplace_back(gAdd(STACK_START,TEMP+1,STACK_START)); //add stack_start by the memory needed
+        output.emplace_back(gSetStack(TEMP,1)); //retrieve the return position
         output.emplace_back(gJump(backTo)); //jump back
+
+        output[toFinalChange].x=output.size();
         currentFunction=""; //restore state
     }else if(firstToken.value=="return"){
         if(lexer.scryToken().value==";"){
@@ -414,9 +457,11 @@ bool compileStatement(){
         }else {
             compileExpression();
         }
+        //same code as above. Change both occurrence!!
+        output.emplace_back(gGetStack(TEMP+2,1));
         output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
         output.emplace_back(gMinus(STACK_START,TEMP+1,STACK_START));
-        output.emplace_back(gJumpMem(STACK_START));
+        output.emplace_back(gJumpMem(TEMP+2));
 
         ensureNext(";");
     }else{
@@ -451,11 +496,11 @@ int main(int argc, char** argv){
     int count=0;
     for(auto t:output){
         outStream<<t.opcode<<" ";
-        if(t.x!=-1){
+        if(t.x!=ABSENT_NUMBER){
             outStream<<t.x<<" ";
-            if(t.y!=-1){
+            if(t.y!=ABSENT_NUMBER){
                 outStream<<t.y<<" ";
-                if(t.z!=-1){
+                if(t.z!=ABSENT_NUMBER){
                     outStream<<t.z<<" ";
                 }
             }

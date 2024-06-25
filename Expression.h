@@ -38,7 +38,8 @@ public:
 class ValueExpression: public Expression{
 public:
     Token token;
-    explicit ValueExpression(Token token):token(token){}
+    bool isFunction;
+    explicit ValueExpression(Token token,bool isFunction):token(token),isFunction(isFunction){}
     void compile(vector<Operation> &ops, int putAt) override;
 };
 

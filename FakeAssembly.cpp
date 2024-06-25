@@ -49,6 +49,12 @@ int main(int argc, char** argv){
 
     cerr<<"Read Code Succeed. LOC="<<ops.size()<<endl;
 
+    int count=0;
+    for(auto t:ops){
+        cerr<<count<<"\t"<<t<<endl;
+        count++;
+    }
+
     //time to execute
     int pt=0;
     while(true){

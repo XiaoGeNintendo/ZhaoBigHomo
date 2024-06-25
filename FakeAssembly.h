@@ -6,11 +6,11 @@
 #define ZHAOBIGHOMO_FAKEASSEMBLY_H
 #include <iostream>
 using namespace std;
-
+#define ABSENT_NUMBER -998244353
 struct Operation{
     int opcode;
     int x,y,z;
-    explicit Operation(int opcode=-1, int x=-1, int y=-1, int z=-1):opcode(opcode),x(x),y(y),z(z){}
+    explicit Operation(int opcode=ABSENT_NUMBER, int x=ABSENT_NUMBER, int y=ABSENT_NUMBER, int z=ABSENT_NUMBER):opcode(opcode),x(x),y(y),z(z){}
 };
 
 inline ostream& operator<<(ostream& os, Operation op){
