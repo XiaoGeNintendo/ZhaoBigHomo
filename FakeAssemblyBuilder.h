@@ -10,7 +10,7 @@ using namespace std;
 
 // Template function to append one vector to another using operator+
 template <typename T>
-std::vector<T> operator+(const std::vector<T>& vec1, const std::vector<T>& vec2) {
+inline std::vector<T> operator+(const std::vector<T>& vec1, const std::vector<T>& vec2) {
     std::vector<T> result = vec1;  // Start with a copy of the first vector
     result.insert(result.end(), vec2.begin(), vec2.end());  // Append the second vector
     return result;
@@ -35,7 +35,7 @@ const int TEMP_VAR_COUNT=10;
  * @param x
  * @return
  */
-Operation gSet(int mem,int x){
+inline Operation gSet(int mem,int x){
     return Operation(0,x,mem);
 }
 
@@ -46,7 +46,7 @@ Operation gSet(int mem,int x){
  * @param idx
  * @return
  */
-Operation gArraySet(int x,int B, int idx){
+inline Operation gArraySet(int x,int B, int idx){
     return Operation(1,x,B,idx);
 }
 
@@ -54,14 +54,14 @@ Operation gArraySet(int x,int B, int idx){
  * Opcode=1. Set MEM[offset+MEM[STACK_START]]=MEM[x]
  * Useful for setting local variables etc.
  */
-Operation gSetStack(int x,int offset){
+inline Operation gSetStack(int x,int offset){
     return gArraySet(x,-offset,STACK_START);
 }
 
 /**
  * Opcode=2. Set MEM[x]=MEM[B+MEM[idx]]
  */
-Operation gArrayGet(int x,int B,int idx){
+inline Operation gArrayGet(int x,int B,int idx){
  return Operation(2,B,idx,x);
 }
 
@@ -69,7 +69,7 @@ Operation gArrayGet(int x,int B,int idx){
  * Opcode=2. Set MEM[x]=MEM[-offset+MEM[STACK_START]]
  * Useful for fetching local variables etc.
  */
-Operation gGetStack(int x,int offset){
+inline Operation gGetStack(int x,int offset){
     return gArrayGet(x,-offset,STACK_START);
 }
 /**
@@ -78,7 +78,7 @@ Operation gGetStack(int x,int offset){
  * @param to
  * @return
  */
-Operation gCopy(int from, int to){
+inline Operation gCopy(int from, int to){
     return Operation(3,from,to);
 }
 
@@ -89,7 +89,7 @@ Operation gCopy(int from, int to){
  * @param to
  * @return
  */
-Operation gAdd(int op1, int op2, int to){
+inline Operation gAdd(int op1, int op2, int to){
     return Operation(4,op1,op2,to);
 }
 /**
@@ -99,39 +99,39 @@ Operation gAdd(int op1, int op2, int to){
  * @param to
  * @return
  */
-Operation gMinus(int op1, int op2, int to){
+inline Operation gMinus(int op1, int op2, int to){
     return Operation(5,op1,op2,to);
 }
 
-Operation gMultiply(int op1, int op2, int to){
+inline Operation gMultiply(int op1, int op2, int to){
     return Operation(6,op1,op2,to);
 }
-Operation gDivide(int op1, int op2, int to){
+inline Operation gDivide(int op1, int op2, int to){
     return Operation(7,op1,op2,to);
 }
-Operation gMod(int op1, int op2, int to){
+inline Operation gMod(int op1, int op2, int to){
     return Operation(8,op1,op2,to);
 }
-Operation gEqual(int op1, int op2, int to){
+inline Operation gEqual(int op1, int op2, int to){
     return Operation(9,op1,op2,to);
 }
-Operation gGreater(int op1, int op2, int to){
+inline Operation gGreater(int op1, int op2, int to){
     return Operation(10,op1,op2,to);
 }
-Operation gSmaller(int op1, int op2, int to){
+inline Operation gSmaller(int op1, int op2, int to){
     return Operation(11,op1,op2,to);
 }
-Operation gAnd(int op1, int op2, int to){
+inline Operation gAnd(int op1, int op2, int to){
     return Operation(12,op1,op2,to);
 }
-Operation gOr(int op1, int op2, int to){
+inline Operation gOr(int op1, int op2, int to){
     return Operation(13,op1,op2,to);
 }
 
 /**
  * Opcode=14. MEM[to]=!MEM[from]
  */
-Operation gNot(int from,int to){
+inline Operation gNot(int from,int to){
     return Operation(14,from,to);
 }
 
@@ -141,7 +141,7 @@ Operation gNot(int from,int to){
  * @param B
  * @return
  */
-Operation gJumpIf(int x, int B){
+inline Operation gJumpIf(int x, int B){
     return Operation(20,x,B);
 }
 
@@ -150,7 +150,7 @@ Operation gJumpIf(int x, int B){
  * @param B
  * @return
  */
-Operation gJump(int B){
+inline Operation gJump(int B){
     return Operation(30,B);
 }
 
@@ -159,14 +159,14 @@ Operation gJump(int B){
  * @param B
  * @return
  */
-Operation gJumpMem(int B){
+inline Operation gJumpMem(int B){
     return Operation(40,B);
 }
 /**
  * Opcode=60 reads OUTPUT_TEMP
  * @return
  */
-Operation gOutput(){
+inline Operation gOutput(){
     return Operation(50,OUTPUT_TEMP);
 }
 
@@ -174,7 +174,7 @@ Operation gOutput(){
  * Opcode=50 inputs to INPUT_TEMP
  * @return
  */
-Operation gInput(){
+inline Operation gInput(){
     return Operation(60,INPUT_TEMP);
 }
 #endif //ZHAOBIGHOMO_FAKEASSEMBLYBUILDER_H

@@ -434,10 +434,12 @@ int main(int argc, char** argv){
         exit(1);
     }
 
+    initExpressionParsingModule();
+
     lexer.open(argv[1]);
     outStream=ofstream(argv[2]);
     output.emplace_back(gSet(1,1));
-    output.emplace_back(gSet(STACK_START,STACK_START+1));
+    output.emplace_back(gSet(STACK_START,STACK_START+50));
     while(true){
         bool res=compileStatement();
         if(!res){

@@ -13,7 +13,7 @@ struct Operation{
     explicit Operation(int opcode=-1, int x=-1, int y=-1, int z=-1):opcode(opcode),x(x),y(y),z(z){}
 };
 
-ostream& operator<<(ostream& os, Operation op){
+inline ostream& operator<<(ostream& os, Operation op){
     int t=op.opcode;
     int x=op.x;
     int y=op.y;
@@ -45,7 +45,7 @@ ostream& operator<<(ostream& os, Operation op){
     return os;
 }
 
-int getOperandCount(int opcode){
+inline int getOperandCount(int opcode){
     if(opcode==1 || opcode==2 || 4<=opcode && opcode<=13){
         return 3;
     }else if(opcode==0 || opcode==3 || opcode==14 || opcode==20){
