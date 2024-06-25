@@ -416,6 +416,9 @@ bool compileStatement(){
         if(currentFunction!=""){ //check not nested function
             throwNested(funcName.value);
         }
+        if(functionPointers.count(funcName.value)){
+            throwDuplicate(funcName.value,"functions");
+        }
 
         ensureNext("(");
         //TODO parameter function
@@ -507,6 +510,14 @@ int main(int argc, char** argv){
         if(!res){
             break;
         }
+    }
+
+    if(!functionPointers.count("main")){
+        warn("No main function declared. Will not attempt to call main when start up.");
+    }else{
+        //call main function
+        output.emplace_back(gSet(TEMP,output.size()+2));
+        output.emplace_back(gJump(functionPointers["main"]));
     }
 
     int count=0;
