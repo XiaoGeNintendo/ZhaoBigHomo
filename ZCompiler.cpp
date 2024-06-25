@@ -77,6 +77,14 @@ map<string,int> localVarCountInFunc;
  * This map points to the start program line that a function starts.
  */
 map<string,int> functionPointers;
+
+/**
+ * Return in functions do not know how many local variables are there in the function, therefore they do not know how much
+ * the stack pointer should decrease when returned.
+ *
+ * This holds the temporary return commands that need to set up localVarCountInFunc properly after function terminates.
+ */
+vector<int> returnPostProcess;
 //============================================================Expression related thingy
 /*
  * Expression priority:
@@ -416,6 +424,7 @@ bool compileStatement(){
         //initialize local variables
         currentFunction=funcName.value;
         localVars.clear();
+        returnPostProcess.clear();
         localVars["%RETURN_ADDRESS%"]=1;
         for(int i=1;i<=TEMP_VAR_COUNT;i++){
             localVars["%TEMP"+to_string(i)+"%"]=i+1;
@@ -450,6 +459,12 @@ bool compileStatement(){
         output.emplace_back(gJump(backTo)); //jump back
 
         output[toFinalChange].x=output.size();
+
+        //change all returns
+        for(auto loc:returnPostProcess){
+            output[loc].x=localVarCountInFunc[currentFunction];
+        }
+
         currentFunction=""; //restore state
     }else if(firstToken.value=="return"){
         if(lexer.scryToken().value==";"){
@@ -459,7 +474,8 @@ bool compileStatement(){
         }
         //same code as above. Change both occurrence!!
         output.emplace_back(gGetStack(TEMP+2,1));
-        output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
+        output.emplace_back(gSet(TEMP+1,ABSENT_NUMBER));
+        returnPostProcess.push_back(output.size()-1); //need to modify this return command later on
         output.emplace_back(gMinus(STACK_START,TEMP+1,STACK_START));
         output.emplace_back(gJumpMem(TEMP+2));
 

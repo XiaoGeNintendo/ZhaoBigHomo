@@ -49,9 +49,9 @@ Token Lexer::getToken(){
             s+=char(next());
         }
         return {INTEGER,s};
-    }else if(isalpha(c)){
+    }else if(isalpha_(c)){
         s+=c;
-        while(isalphaordigit(c=scry())){
+        while(isalpha_ordigit(c=scry())){
             s+=char(next());
         }
         return {IDENTIFIER,s};

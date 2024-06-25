@@ -70,8 +70,21 @@ inline bool isLongOperator(const string& s){
     return isAnyOfAssignment(s) || isAnyOfLongLogicalOperation(s) | isAnyOfComparator(s);
 }
 
-inline bool isalphaordigit(int c){
-    return isalpha(c) || isdigit(c);
+/**
+ * Returns true if c is alpha or _
+ * @param c
+ * @return
+ */
+inline bool isalpha_(int c){
+    return isalpha(c) || c=='_';
+}
+/**
+ * Returns true if c is alpha or _ or digit
+ * @param c
+ * @return
+ */
+inline bool isalpha_ordigit(int c){
+    return isalpha_(c) || isdigit(c);
 }
 
 class Lexer{
