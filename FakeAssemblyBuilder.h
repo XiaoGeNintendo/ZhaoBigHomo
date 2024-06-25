@@ -51,12 +51,27 @@ Operation gArraySet(int x,int B, int idx){
 }
 
 /**
+ * Opcode=1. Set MEM[offset+MEM[STACK_START]]=MEM[x]
+ * Useful for setting local variables etc.
+ */
+Operation gSetStack(int x,int offset){
+    return gArraySet(x,-offset,STACK_START);
+}
+
+/**
  * Opcode=2. Set MEM[x]=MEM[B+MEM[idx]]
  */
 Operation gArrayGet(int x,int B,int idx){
  return Operation(2,B,idx,x);
 }
 
+/**
+ * Opcode=2. Set MEM[x]=MEM[-offset+MEM[STACK_START]]
+ * Useful for fetching local variables etc.
+ */
+Operation gGetStack(int x,int offset){
+    return gArrayGet(x,-offset,STACK_START);
+}
 /**
  * Opcode=3
  * @param from

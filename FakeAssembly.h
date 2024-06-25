@@ -5,6 +5,7 @@
 #ifndef ZHAOBIGHOMO_FAKEASSEMBLY_H
 #define ZHAOBIGHOMO_FAKEASSEMBLY_H
 #include <iostream>
+using namespace std;
 
 struct Operation{
     int opcode;

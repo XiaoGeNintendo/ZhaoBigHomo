@@ -8,36 +8,39 @@
 void BinaryExpression::compile(vector<Operation> &ops, int putAt) {
     left->compile(ops,putAt+1);
     right->compile(ops,putAt+2);
+    ops.emplace_back(gGetStack(TEMP,putAt+1));
+    ops.emplace_back(gGetStack(TEMP+1,putAt+2));
     if(op.value=="+"){
-        ops.emplace_back(gAdd(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gAdd(TEMP,TEMP+1,TEMP));
     }else if(op.value=="-"){
-        ops.emplace_back(gMinus(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gMinus(TEMP,TEMP+1,TEMP));
     }else if(op.value=="*"){
-        ops.emplace_back(gMultiply(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gMultiply(TEMP,TEMP+1,TEMP));
     }else if(op.value=="/"){
-        ops.emplace_back(gDivide(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gDivide(TEMP,TEMP+1,TEMP));
     }else if(op.value=="%"){
-        ops.emplace_back(gMod(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gMod(TEMP,TEMP+1,TEMP));
     }else if(op.value=="=="){
-        ops.emplace_back(gEqual(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gEqual(TEMP,TEMP+1,TEMP));
     }else if(op.value==">"){
-        ops.emplace_back(gGreater(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gGreater(TEMP,TEMP+1,TEMP));
     }else if(op.value=="<"){
-        ops.emplace_back(gSmaller(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gSmaller(TEMP,TEMP+1,TEMP));
     }else if(op.value=="&&"){
-        ops.emplace_back(gAnd(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gAnd(TEMP,TEMP+1,TEMP));
     }else if(op.value=="||"){
-        ops.emplace_back(gOr(putAt+1,putAt+2,putAt));
+        ops.emplace_back(gOr(TEMP,TEMP+1,TEMP));
     }else if(op.value==">="){
-        ops.emplace_back(gSmaller(putAt+1,putAt+2,putAt));
-        ops.emplace_back(gNot(putAt,putAt));
+        ops.emplace_back(gSmaller(TEMP,TEMP+1,TEMP));
+        ops.emplace_back(gNot(TEMP,TEMP));
     }else if(op.value=="<="){
-        ops.emplace_back(gGreater(putAt+1,putAt+2,putAt));
-        ops.emplace_back(gNot(putAt,putAt));
+        ops.emplace_back(gGreater(TEMP,TEMP+1,TEMP));
+        ops.emplace_back(gNot(TEMP,TEMP));
     }else if(op.value=="!="){
-        ops.emplace_back(gEqual(putAt+1,putAt+2,putAt));
-        ops.emplace_back(gNot(putAt,putAt));
+        ops.emplace_back(gEqual(TEMP,TEMP+1,TEMP));
+        ops.emplace_back(gNot(TEMP,TEMP));
     }
+    ops.emplace_back(gSetStack(TEMP,putAt));
 }
 
 BinaryExpression::~BinaryExpression() {
@@ -57,7 +60,8 @@ void TrinaryExpression::compile(vector<Operation> &ops, int putAt) {
     //  t <-------------+  |
     //  copy     <----------
     q->compile(ops,putAt+1);
-    ops.emplace_back(gJumpIf(putAt+1,-1));
+    ops.emplace_back(gGetStack(TEMP,putAt+1));
+    ops.emplace_back(gJumpIf(TEMP,-1));
     int toChange=ops.size()-1;
     //false value
     f->compile(ops,putAt+2);
@@ -67,11 +71,25 @@ void TrinaryExpression::compile(vector<Operation> &ops, int putAt) {
     ops[toChange].y=ops.size();
     t->compile(ops,putAt+2);
     ops[toChange2].x=ops.size();
-    ops.emplace_back(gCopy(putAt+2,putAt));
+    ops.emplace_back(gGetStack(TEMP,putAt+2));
+    ops.emplace_back(gSetStack(TEMP,putAt));
 }
 
 TrinaryExpression::~TrinaryExpression() {
     delete q;
     delete t;
     delete f;
+}
+
+void UnaryExpression::compile(vector<Operation> &ops, int putAt) {
+    left->compile(ops,putAt+1);
+    ops.emplace_back(gGetStack(TEMP,putAt+1));
+    if(op.value=="-"){
+        ops.emplace_back(gMinus(0,TEMP,TEMP));
+    }
+    ops.emplace_back(gSetStack(TEMP,putAt));
+}
+
+UnaryExpression::~UnaryExpression() {
+    delete left;
 }

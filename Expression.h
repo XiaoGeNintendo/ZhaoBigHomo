@@ -30,8 +30,26 @@ public:
     Expression* left;
     Expression* right;
 
+    BinaryExpression(Token op, Expression* left, Expression* right):op(op),left(left),right(right){}
     void compile(vector<Operation> &ops, int putAt) override;
     ~BinaryExpression() override;
+};
+
+class ValueExpression: public Expression{
+public:
+    Token token;
+    explicit ValueExpression(Token token):token(token){}
+    void compile(vector<Operation> &ops, int putAt) override;
+};
+
+class UnaryExpression:public Expression{
+public:
+    Token op;
+    Expression* left;
+
+    UnaryExpression(Token op, Expression* left):op(op),left(left){}
+    void compile(vector<Operation> &ops, int putAt) override;
+    ~UnaryExpression() override;
 };
 
 class TrinaryExpression:public Expression{
@@ -40,7 +58,7 @@ public:
     Expression* t;
     Expression* f;
 
-    TrinaryExpression(Expression* p, Expression* t,Expression* f):q(q),t(t),f(f){}
+    TrinaryExpression(Expression* q, Expression* t,Expression* f):q(q),t(t),f(f){}
 
     void compile(vector<Operation> &ops, int putAt) override;
     ~TrinaryExpression() override;

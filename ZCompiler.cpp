@@ -12,8 +12,14 @@ using namespace std;
 #define UNDEFINED_SYMBOL 12
 #define DUPLICATE_SYMBOL 13
 #define NESTED_FUNCTION 14
+#define CUSTOM_FAIL 15
 Lexer lexer;
 ofstream outStream;
+
+inline void fail(const string& msg,int err=CUSTOM_FAIL){
+    cerr<<"Error: [Line "<<lexer.line<<"] "<<msg<<endl;
+    exit(err);
+}
 
 inline void ensure(const Token& token, int tokenType){
     if(token.type!=tokenType){
@@ -56,6 +62,11 @@ map<int,string> modifier;
  */
 string currentFunction;
 map<string,int> globalVars;
+/**
+ * The local vars location in the current function. If localVars[s]=X, then the address MEM[STACK_START]-X holds the wanted variable
+ *
+ * Note that 0 should not occur in this map
+ */
 map<string,int> localVars;
 map<string,int> localVarCountInFunc;
 
@@ -68,8 +79,8 @@ map<string,int> localVarCountInFunc;
  * &&
  * >= <= == > < !=
  * + -
- * unary + -
  * * /
+ * unary + -
  *()
  * x=3>5?7:-6*5+4>>3
  * x=3>5?7:-30+4>>3
@@ -78,61 +89,78 @@ map<string,int> localVarCountInFunc;
 void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
     right->compile(ops,putAt+1);
 
+    //TEMP will point to the value we want to set
     int flag=0;
-    if(localVars.count(left)){
+    if(localVars.count(left)){ //local variable
         flag=1;
-        ops.emplace_back(gCopy(STACK_START,putAt+2));
-        ops.emplace_back(gSet(putAt+3,localVars[left]+1));
-        ops.emplace_back(gMinus(putAt+2,putAt+3,putAt+2)); //putAt+2 is now pos
+        ops.emplace_back(gCopy(STACK_START,TEMP));
+        ops.emplace_back(gSet(TEMP+1,localVars[left]));
+        ops.emplace_back(gMinus(TEMP,TEMP+1,TEMP));
     }else if(globalVars.count(left)){
         flag=2;
-        ops.emplace_back(gSet(putAt+2,globalVars[left]+GLOBAL_START));
+        ops.emplace_back(gSet(TEMP,globalVars[left]+GLOBAL_START));
     }
+    //TEMP+1 now holds the right value
+    ops.emplace_back(gGetStack(TEMP+1,putAt+1));
 
     if(flag==0){
         throwUndefined(left,"assignment expression");
     }
 
     if(op.value=="="){
-        ops.emplace_back(gArraySet(putAt+1,0,putAt+2));
-        ops.emplace_back(gCopy(putAt+1,putAt));
+        //do nothing
     }else if(op.value=="+="){
-        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
-        ops.emplace_back(gAdd(putAt+1,putAt+3,putAt+3));
-        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
-        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+        ops.emplace_back(gArrayGet(TEMP+2,0,TEMP));
+        ops.emplace_back(gAdd(TEMP+1,TEMP+2,TEMP+1));
+        //TEMP+1 now holds the updated value
     }else if(op.value=="-="){
-        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
-        ops.emplace_back(gMinus(putAt+1,putAt+3,putAt+3));
-        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
-        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+        ops.emplace_back(gArrayGet(TEMP+2,0,TEMP));
+        ops.emplace_back(gMinus(TEMP+2,TEMP+1,TEMP+1));
     }else if(op.value=="*="){
-        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
-        ops.emplace_back(gMultiply(putAt+1,putAt+3,putAt+3));
-        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
-        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+        ops.emplace_back(gArrayGet(TEMP+2,0,TEMP));
+        ops.emplace_back(gMultiply(TEMP+1,TEMP+2,TEMP+1));
     }else if(op.value=="/="){
-        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
-        ops.emplace_back(gDivide(putAt+1,putAt+3,putAt+3));
-        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
-        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+        ops.emplace_back(gArrayGet(TEMP+2,0,TEMP));
+        ops.emplace_back(gDivide(TEMP+2,TEMP+1,TEMP+1));
     }else if(op.value=="%="){
-        ops.emplace_back(gArrayGet(putAt+3,0,putAt+2));
-        ops.emplace_back(gMod(putAt+1,putAt+3,putAt+3));
-        ops.emplace_back(gArraySet(putAt+3,0,putAt+2));
-        ops.emplace_back(gArrayGet(putAt,0,putAt+2));
+        ops.emplace_back(gArrayGet(TEMP+2,0,TEMP));
+        ops.emplace_back(gMod(TEMP+2,TEMP+1,TEMP+1));
     }
+
+    ops.emplace_back(gArraySet(TEMP+1,0,TEMP));
+    ops.emplace_back(gSetStack(TEMP+1,putAt));
+
     throwUndefined(op.value,"assignment expression");
 }
 
-ExpressionLayerLogic logics[18];
+void ValueExpression::compile(vector<Operation> &ops, int putAt) {
+    if(token.type==INTEGER){
+        ops.emplace_back(gSet(TEMP,stoi(token.value)));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+    }else if(token.type==IDENTIFIER){
+        if(globalVars.count(token.value)){
+            int loc=globalVars[token.value];
+            ops.emplace_back(gSetStack(loc+GLOBAL_START,putAt));
+        }else if(localVars.count(token.value)){
+            int loc=localVars[token.value];
+            ops.emplace_back(gGetStack(TEMP,loc));
+            ops.emplace_back(gSetStack(TEMP,putAt));
+        }else{
+            throwUndefined(token.value,"value expression");
+        }
+    }else{
+        fail("Expected INTEGER or IDENTIFIER in value expression",EXPECTED_BUT_FOUND);
+    }
+}
+
+vector<ExpressionLayerLogic> logics;
 
 Expression* compileExpression(int layer, int putAt);
 
 void initExpressionParsingModule(){
-    ExpressionLayerLogic l0=ExpressionLayerLogic(); //= += etc
-    l0.isSpecialLayer=true;
-    l0.specialOp=[](int layer, int putAt)->Expression*{
+    ExpressionLayerLogic layerEqual=ExpressionLayerLogic(); //= += etc
+    layerEqual.isSpecialLayer=true;
+    layerEqual.specialOp=[](int layer, int putAt)->Expression*{
         auto first=lexer.getToken();
         auto second=lexer.scryToken().value;
         if(isAnyOfAssignment(second)){
@@ -148,9 +176,9 @@ void initExpressionParsingModule(){
         }
     };
 
-    ExpressionLayerLogic l1=ExpressionLayerLogic(); //?:
-    l1.isSpecialLayer=true;
-    l1.specialOp=[](int layer, int putAt)->Expression*{
+    ExpressionLayerLogic layerTrinary=ExpressionLayerLogic(); //?:
+    layerTrinary.isSpecialLayer=true;
+    layerTrinary.specialOp=[](int layer, int putAt)->Expression*{
         auto first=compileExpression(layer+1,putAt+1);
         if(lexer.scryToken().value=="?"){
             lexer.getToken();
@@ -163,13 +191,80 @@ void initExpressionParsingModule(){
             return first;
         }
     };
+
+    ExpressionLayerLogic layerLogicalOr=ExpressionLayerLogic();
+    layerLogicalOr.operators={"||"};
+    ExpressionLayerLogic layerLogicalAnd=ExpressionLayerLogic();
+    layerLogicalAnd.operators={"&&"};
+    ExpressionLayerLogic layerLogical=ExpressionLayerLogic();
+    layerLogical.operators={">","<",">=","<=","!=","=="};
+    ExpressionLayerLogic layerPlusMinus=ExpressionLayerLogic();
+    layerPlusMinus.operators={"+","-"};
+    ExpressionLayerLogic layerMultipleDivide=ExpressionLayerLogic();
+    layerMultipleDivide.operators={"*","/"};
+
+    ExpressionLayerLogic layerUnary=ExpressionLayerLogic();
+    layerUnary.isSpecialLayer=true;
+    layerUnary.specialOp=[](int layer, int putAt)->Expression*{
+        auto first=lexer.scryToken();
+        if(first.value=="+" || first.value=="-"){
+            lexer.getToken();
+            return new UnaryExpression(first, compileExpression(layer,putAt+1));
+        }
+        return compileExpression(layer+1,putAt);
+    };
+
+    ExpressionLayerLogic layerStuff=ExpressionLayerLogic();
+    layerStuff.isSpecialLayer=true;
+    layerStuff.specialOp=[](int layer, int putAt)->Expression*{
+        auto token=lexer.getToken();
+        if(token.value=="("){
+            auto res= compileExpression(0,putAt+1);
+            ensureNext(")");
+            return res;
+        }else{
+            return new ValueExpression(token);
+        }
+    };
+
+    logics={layerEqual,layerTrinary,layerLogicalOr,layerLogicalAnd,layerLogical,layerPlusMinus,layerMultipleDivide,layerUnary,layerStuff};
 }
 
+Expression* compileExpression(int layer, int putAt){
+    if(layer>=logics.size()){
+        fail("Internal Error: Expression logic layer overflow",CUSTOM_FAIL);
+    }
 
+    if(logics[layer].isSpecialLayer){
+        return logics[layer].specialOp(layer,putAt);
+    }
 
+    //use ordinary route
+    auto e=compileExpression(layer+1,putAt);
+    vector<pair<Token,Expression*>> exp;
+    exp.emplace_back(Token(),e);
+    while(true){
+        if(find(logics[layer].operators.begin(), logics[layer].operators.end(),lexer.scryToken().value)!=logics[layer].operators.end()){
+            auto t=lexer.getToken();
+            auto ee= compileExpression(layer+1,putAt);
+            exp.emplace_back(t,ee);
+        }else{
+            break;
+        }
+    }
+
+    Expression* now=e;
+    for(int i=1;i<exp.size();i++){
+        now=new BinaryExpression(exp[i].first,now,exp[i].second);
+    }
+    return now;
+}
 
 void compileExpression(){
-
+    auto exp= compileExpression(0,114514);
+    exp->compile(output,2);
+    output.emplace_back(gGetStack(TEMP,2));
+    delete exp;
 }
 
 bool compileStatement(){
@@ -187,10 +282,7 @@ bool compileStatement(){
             //it's a local variable
             int relativePosition=localVars[secondToken.value];
             output.emplace_back(gInput());
-            output.emplace_back(gCopy(STACK_START,TEMP));
-            output.emplace_back(gSet(TEMP+1,relativePosition));
-            output.emplace_back(gMinus(TEMP,TEMP+1,TEMP));
-            output.emplace_back(gArraySet(INPUT_TEMP,0,TEMP));
+            output.emplace_back(gSetStack(INPUT_TEMP,relativePosition));
         }else if(globalVars.count(secondToken.value)){
             //it's a global variable
             int position=globalVars[secondToken.value];
@@ -250,7 +342,7 @@ bool compileStatement(){
                 throwDuplicate(varName.value,currentFunction);
             }
 
-            localVars[varName.value]=localVars.size();
+            localVars[varName.value]=localVars.size()+1;
         }
 
         //give it a default value
@@ -262,10 +354,7 @@ bool compileStatement(){
                 output.emplace_back(gCopy(TEMP,GLOBAL_START+globalVars[varName.value]));
             }else{
                 //local variable
-                output.emplace_back(gCopy(STACK_START,TEMP+1)); //get stack top
-                output.emplace_back(gSet(TEMP+2,localVars[varName.value]+1));
-                output.emplace_back(gMinus(TEMP+1,TEMP+2,TEMP+1)); //subtract the index
-                output.emplace_back(gArraySet(TEMP,0,TEMP+1)); //set
+                output.emplace_back(gSetStack(TEMP,localVars[varName.value]));
             }
         }
         ensureNext(";");
@@ -293,9 +382,9 @@ bool compileStatement(){
         //initialize local variables
         currentFunction=funcName.value;
         localVars.clear();
-        localVars["%RETURN_ADDRESS%"]=0;
+        localVars["%RETURN_ADDRESS%"]=1;
         for(int i=1;i<=TEMP_VAR_COUNT;i++){
-            localVars["%TEMP"+to_string(i)+"%"]=i;
+            localVars["%TEMP"+to_string(i)+"%"]=i+1;
         }
 
         output.emplace_back(gJump(-1)); //prepare to jump to initial code first
