@@ -72,7 +72,15 @@ map<string,int> globalVars;
  * Note that 0 should not occur in this map
  */
 map<string,int> localVars;
-map<string,int> localVarCountInFunc;
+/**
+ * Holds the size of each local variable.
+ */
+map<string,int> localVarSize;
+int currentTotalLocalVarSize,maximumTotalLocalVarSize;
+/**
+ * Used as a stack. Each element holds the local variables defined in that block of {}
+ */
+vector<vector<string>> localVarStack;
 /**
  * This map points to the start program line that a function starts.
  */
@@ -383,8 +391,12 @@ bool compileStatement(){
                 throwDuplicate(varName.value,currentFunction);
             }
 
-            localVars[varName.value]=localVars.size()+1;
-            localVarCountInFunc[currentFunction]=localVars.size();
+            localVars[varName.value]=currentTotalLocalVarSize+1;
+            localVarSize[varName.value]=1; //TODO for more types change this value
+            currentTotalLocalVarSize+=localVarSize[varName.value];
+            maximumTotalLocalVarSize=max(maximumTotalLocalVarSize,currentTotalLocalVarSize);
+            localVarStack.back().push_back(varName.value);
+            cout<<"Variable definition: "<<varName.value<<" in "<<currentFunction<<" assigned to "<<localVars[varName.value]<<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize<<endl;
         }
 
         //give it a default value
@@ -401,6 +413,9 @@ bool compileStatement(){
         }
         ensureNext(";");
     }else if(firstToken.value=="{"){
+        //firstly, create a new layer
+        localVarStack.emplace_back();
+
         while(true){
             if(lexer.scryToken().value=="}"){
                 lexer.getToken();
@@ -408,6 +423,15 @@ bool compileStatement(){
             }
             compileStatement();
         }
+
+        //clear all local variable in this layer
+        for(const string& name:localVarStack.back()){
+            currentTotalLocalVarSize-=localVarSize[name];
+            localVars.erase(name);
+            localVarSize.erase(name);
+        }
+        localVarStack.pop_back();
+
     }else if(firstToken.value=="def"){
 
         auto funcName=lexer.getToken();
@@ -432,7 +456,7 @@ bool compileStatement(){
         for(int i=1;i<=TEMP_VAR_COUNT;i++){
             localVars["%TEMP"+to_string(i)+"%"]=i+1;
         }
-        localVarCountInFunc[currentFunction]=localVars.size();
+        maximumTotalLocalVarSize=currentTotalLocalVarSize=localVars.size();
 
         output.emplace_back(gJump(-1)); //to prevent the code being executed when just defined
         int toFinalChange=output.size()-1;
@@ -448,7 +472,7 @@ bool compileStatement(){
         //same code as the return below. Change both occurrence!!
         output.emplace_back(gSet(TEMP,0));
         output.emplace_back(gGetStack(TEMP+2,1));
-        output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
+        output.emplace_back(gSet(TEMP+1,maximumTotalLocalVarSize));
         output.emplace_back(gMinus(STACK_START,TEMP+1,STACK_START));
         output.emplace_back(gJumpMem(TEMP+2));
 
@@ -456,7 +480,7 @@ bool compileStatement(){
 
         //function code here
         //TODO reserved for more function code?
-        output.emplace_back(gSet(TEMP+1,localVarCountInFunc[currentFunction]));
+        output.emplace_back(gSet(TEMP+1,maximumTotalLocalVarSize));
         output.emplace_back(gAdd(STACK_START,TEMP+1,STACK_START)); //add stack_start by the memory needed
         output.emplace_back(gSetStack(TEMP,1)); //retrieve the return position
         output.emplace_back(gJump(backTo)); //jump back
@@ -465,7 +489,7 @@ bool compileStatement(){
 
         //change all returns
         for(auto loc:returnPostProcess){
-            output[loc].x=localVarCountInFunc[currentFunction];
+            output[loc].x=maximumTotalLocalVarSize;
         }
 
         currentFunction=""; //restore state
