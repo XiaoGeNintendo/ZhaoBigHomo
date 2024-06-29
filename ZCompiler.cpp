@@ -88,6 +88,17 @@ int currentTotalLocalVarSize,maximumTotalLocalVarSize;
  * Used as a stack. Each element holds the local variables defined in that block of {}
  */
 vector<vector<string>> localVarStack;
+
+/**
+ * all breaks in current loop using a stack.
+ */
+vector<vector<int>> breakLines;
+
+/**
+ * Used in continue parsing. Returns the loop head of the latest defined loop
+ */
+int currentLoopHead;
+
 /**
  * This map points to the start program line that a function starts.
  */
@@ -100,6 +111,7 @@ map<string,int> functionPointers;
  * This holds the temporary return commands that need to set up localVarCountInFunc properly after function terminates.
  */
 vector<int> returnPostProcess;
+
 //============================================================Expression related thingy
 /*
  * Expression priority:
@@ -402,15 +414,27 @@ bool compileStatement(){
         }
     }else if(firstToken.value=="while"){
         int startOfLoop=output.size();
+        currentLoopHead=startOfLoop;
+
         ensureNext("(");
         compileExpression();
         ensureNext(")");
+
         output.emplace_back(gNot(TEMP,TEMP));
         output.emplace_back(gJumpIf(TEMP,-1));
         int toChange=output.size()-1;
+
+        breakLines.emplace_back();
+
         compileStatement();
         output.emplace_back(gJump(startOfLoop));
         output[toChange].y=output.size();
+
+        //change all break statement
+        for(int line:breakLines.back()){
+            output[line].x=output.size();
+        }
+        breakLines.pop_back();
     }else if(firstToken.value=="var"){
         auto varName=lexer.getToken();
         ensure(varName,IDENTIFIER);
@@ -536,19 +560,26 @@ bool compileStatement(){
         }
 
         currentFunction=""; //restore state
-    }else if(firstToken.value=="return"){
-        if(lexer.scryToken().value==";"){
-            output.emplace_back(gSet(TEMP,0));
-        }else {
+    }else if(firstToken.value=="return") {
+        if (lexer.scryToken().value == ";") {
+            output.emplace_back(gSet(TEMP, 0));
+        } else {
             compileExpression();
         }
         //same code as above. Change both occurrence!!
-        output.emplace_back(gGetStack(TEMP+2,1));
-        output.emplace_back(gSet(TEMP+1,ABSENT_NUMBER));
-        returnPostProcess.push_back(output.size()-1); //need to modify this return command later on
-        output.emplace_back(gMinus(STACK_START,TEMP+1,STACK_START));
-        output.emplace_back(gJumpMem(TEMP+2));
+        output.emplace_back(gGetStack(TEMP + 2, 1));
+        output.emplace_back(gSet(TEMP + 1, ABSENT_NUMBER));
+        returnPostProcess.push_back(output.size() - 1); //need to modify this return command later on
+        output.emplace_back(gMinus(STACK_START, TEMP + 1, STACK_START));
+        output.emplace_back(gJumpMem(TEMP + 2));
 
+        ensureNext(";");
+    }else if(firstToken.value=="continue") {
+        output.emplace_back(gJump(currentLoopHead));
+        ensureNext(";");
+    }else if(firstToken.value=="break"){
+        breakLines.back().push_back(output.size());
+        output.emplace_back(gJump(-1));
         ensureNext(";");
     }else{
         //consider as expression
