@@ -23,7 +23,23 @@ void BinaryExpression::compile(vector<Operation> &ops, int putAt) {
         ops[toChange].x=ops.size();
         return;
     }
+    if(op.value=="||"){
+        left->compile(ops,putAt+1);
+        ops.emplace_back(gGetStack(TEMP,putAt+1));
+        ops.emplace_back(gJumpIf(TEMP,-1));
+        int toChange=ops.size()-1;
+        //temp==0
+        right->compile(ops,putAt+1); //start from sz+3
+        ops.emplace_back(gGetStack(TEMP,putAt+1));
+        ops.emplace_back(gOr(TEMP,TEMP,TEMP));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+        ops.emplace_back(gJump(ops.size()+2));
 
+        ops[toChange].y=ops.size();
+        //temp==1
+        ops.emplace_back(gSetStack(1,putAt)); //sz+1
+        return;
+    }
     left->compile(ops,putAt+1);
     right->compile(ops,putAt+2);
     ops.emplace_back(gGetStack(TEMP,putAt+1));
