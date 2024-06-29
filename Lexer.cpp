@@ -26,7 +26,7 @@ void Lexer::suckToken(Token t){
     suckedTokens.push_back(t);
 }
 
-Token Lexer::getToken(){
+Token Lexer::_getToken(){
     if(!suckedTokens.empty()){
         auto t=suckedTokens.back();
         suckedTokens.pop_back();
@@ -58,6 +58,21 @@ Token Lexer::getToken(){
     }else if(c==EOF){
         return {ENDOFFILE,""};
     }
+    assert(false);
+}
+
+Token Lexer::getToken() {
+    auto t=_getToken();
+    if(t.value=="//"){
+        tillNextLine();
+        return getToken();
+    }else if(t.value=="/*"){
+        while(_getToken().value!="*/"){
+
+        }
+        return getToken();
+    }
+    return t;
 }
 
 void Lexer::open(string file) {
@@ -73,4 +88,10 @@ Token Lexer::scryToken() {
 
 void Lexer::close() {
     stream.close();
+}
+
+void Lexer::tillNextLine() {
+    string s;
+    getline(stream,s);
+    fw=-2;
 }

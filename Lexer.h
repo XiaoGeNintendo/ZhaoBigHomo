@@ -64,10 +64,17 @@ inline bool isAnyOfComparator(const string& s){
             "==","!=",">=","<="
     };
     return operators.find(s) != operators.end();
-
 }
+
+inline bool isAnyOfCommentComparator(const string& s){
+    static const set<string> operators = {
+            "//","*/","/*"
+    };
+    return operators.find(s) != operators.end();
+}
+
 inline bool isLongOperator(const string& s){
-    return isAnyOfAssignment(s) || isAnyOfLongLogicalOperation(s) | isAnyOfComparator(s);
+    return isAnyOfAssignment(s) || isAnyOfLongLogicalOperation(s) || isAnyOfComparator(s) || isAnyOfCommentComparator(s);
 }
 
 /**
@@ -94,13 +101,26 @@ private:
     int fw=-2;
     vector<Token> suckedTokens;
     ifstream stream;
+
+    Token _getToken();
 public:
     int line;
+    /**
+     * Open the given file for input
+     * @param file
+     */
     void open(string file);
+    /**
+     * Get a token that is not shadowed by any comment section
+     * @return
+     */
     Token getToken();
     void suckToken(Token t);
     Token scryToken();
-
+    /**
+     * Read until '\n' are read
+     */
+    void tillNextLine();
     void close();
 };
 
