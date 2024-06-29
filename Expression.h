@@ -20,7 +20,12 @@ public:
      * @param putAt
      */
      virtual void compile(vector<Operation>& ops, int putAt)=0;
-
+     /**
+      * CompilerTypes check the given function and returns the final type
+      */
+     virtual string typeCheck(){
+         return "int";
+     }
      virtual ~Expression()=default;
 };
 

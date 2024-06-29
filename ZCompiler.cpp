@@ -64,14 +64,16 @@ inline void throwKeyword(const string& s) {
     exit(KEYWORD_CLASH);
 }
 
-vector<Operation> output;
-map<int,string> modifier;
-
-/*
- * Stack Structure:
- *
+/**
+ * The main output ASM
  */
+vector<Operation> output;
+
+
 string currentFunction;
+/**
+ * If globalVars[s]=X, then variable s is stored at GLOBAL_START+X
+ */
 map<string,int> globalVars;
 /**
  * The local vars location in the current function. If localVars[s]=X, then the address MEM[STACK_START]-X holds the wanted variable

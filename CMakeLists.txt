@@ -15,4 +15,5 @@ add_executable(real_product Lexer.h
         FakeAssemblyBuilder.h
         Expression.cpp
         Expression.h
+        CompilerTypes.h
 )
