@@ -13,6 +13,8 @@ using namespace std;
 #define DUPLICATE_SYMBOL 13
 #define NESTED_FUNCTION 14
 #define CUSTOM_FAIL 15
+#define KEYWORD_CLASH 16
+
 Lexer lexer;
 ofstream outStream;
 
@@ -55,6 +57,11 @@ inline void throwDuplicate(const string& s,const string& process="unknown"){
 inline void throwNested(const string& s){
     cerr<<"Error: [Line "<<lexer.line<<"] Nested function is not allowed right now:"<<s<<endl;
     exit(NESTED_FUNCTION);
+}
+
+inline void throwKeyword(const string& s) {
+    cerr << "Error: [Line " << lexer.line << "] Name " << s << " is reserved and should not be used." << endl;
+    exit(KEYWORD_CLASH);
 }
 
 vector<Operation> output;
@@ -168,6 +175,11 @@ void ValueExpression::compile(vector<Operation> &ops, int putAt) {
         if(isFunction){
             //call a function
 
+            //again special judge in true and false
+            if(token.value=="true" || token.value=="false"){
+                fail("true/false is not callable.");
+            }
+
             if(!functionPointers.count(token.value)){
                 throwUndefined(token.value,"value expression (function calling)");
             }
@@ -177,6 +189,18 @@ void ValueExpression::compile(vector<Operation> &ops, int putAt) {
             ops.emplace_back(gJump(functionPointers[token.value]));
             ops.emplace_back(gSetStack(TEMP,putAt));
         }else {
+
+            //check for special case: true and false
+            if(token.value=="true"){
+                ops.emplace_back(gSet(TEMP,1));
+                ops.emplace_back(gSetStack(TEMP,putAt));
+                return;
+            }else if(token.value=="false"){
+                ops.emplace_back(gSet(TEMP,0));
+                ops.emplace_back(gSetStack(TEMP,putAt));
+                return;
+            }
+
             //just a normal variable
             if (globalVars.count(token.value)) {
                 int loc = globalVars[token.value];
@@ -316,6 +340,19 @@ void compileExpression(){
     delete exp;
 }
 
+/**
+ * This checks whether a variable has the same name as an important reserved word
+ * @param name
+ */
+void checkVariableAvailability(const string& name){
+    if(name=="true" || name=="false"){
+        throwKeyword(name);
+    }
+    if(name=="var" || name=="def" || name=="if" || name=="while"){
+        warn(name+" collides with important keyword. This may cause potential issues.");
+    }
+}
+
 bool compileStatement(){
     auto firstToken=lexer.getToken();
 
@@ -378,6 +415,9 @@ bool compileStatement(){
         auto varName=lexer.getToken();
         ensure(varName,IDENTIFIER);
 
+        //First check its availability
+        checkVariableAvailability(varName.value);
+
         if(currentFunction==""){
             //it's a global variable
             if(globalVars.count(varName.value)){
@@ -436,6 +476,9 @@ bool compileStatement(){
 
         auto funcName=lexer.getToken();
         ensure(funcName,IDENTIFIER);
+
+        //First check its availability
+        checkVariableAvailability(funcName.value);
 
         if(currentFunction!=""){ //check not nested function
             throwNested(funcName.value);
