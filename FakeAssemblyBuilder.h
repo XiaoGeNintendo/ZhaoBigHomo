@@ -136,7 +136,7 @@ inline Operation gNot(int from,int to){
 }
 
 /**
- * Opcode=20 jump to B if MEM[x]=0
+ * Opcode=20 jump to B if MEM[x]!=0
  * @param x
  * @param B
  * @return

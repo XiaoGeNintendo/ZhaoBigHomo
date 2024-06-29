@@ -6,6 +6,24 @@
 #include "FakeAssemblyBuilder.h"
 
 void BinaryExpression::compile(vector<Operation> &ops, int putAt) {
+
+    //special judge for && and ||
+    if(op.value=="&&"){
+        left->compile(ops,putAt+1);
+        ops.emplace_back(gGetStack(TEMP,putAt+1));
+        ops.emplace_back(gJumpIf(TEMP,ops.size()+3));
+        //temp==0
+        ops.emplace_back(gSetStack(0,putAt)); //sz+1
+        ops.emplace_back(gJump(-1)); //sz+2
+        int toChange=ops.size()-1;
+        right->compile(ops,putAt+1); //start from sz+3
+        ops.emplace_back(gGetStack(TEMP,putAt+1));
+        ops.emplace_back(gAnd(TEMP,TEMP,TEMP));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+        ops[toChange].x=ops.size();
+        return;
+    }
+
     left->compile(ops,putAt+1);
     right->compile(ops,putAt+2);
     ops.emplace_back(gGetStack(TEMP,putAt+1));
