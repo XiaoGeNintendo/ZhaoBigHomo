@@ -96,14 +96,29 @@ inline bool isalpha_ordigit(int c){
 
 class Lexer{
 private:
+    /**
+     * @return The next meaningful character in the stream
+     */
     char next();
+    /**
+     * @return The next meaningful character in the stream without moving the cursor forward
+     */
     char scry();
     int fw=-2;
     vector<Token> suckedTokens;
     ifstream stream;
 
-    Token _getToken();
+
 public:
+    /**
+     * Get raw token without being shadowed by comments
+     * @return
+     */
+    Token _getToken();
+
+    /**
+     * Current line no.
+     */
     int line;
     /**
      * Open the given file for input
@@ -118,7 +133,7 @@ public:
     void suckToken(Token t);
     Token scryToken();
     /**
-     * Read until '\n' are read
+     * Finish current line while setting fw to initial state
      */
     void tillNextLine();
     void close();
