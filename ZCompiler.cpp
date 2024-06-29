@@ -95,9 +95,9 @@ vector<vector<string>> localVarStack;
 vector<vector<int>> breakLines;
 
 /**
- * Used in continue parsing. Returns the loop head of the latest defined loop
+ * Used in continue parsing. Also a stack of loop heads
  */
-int currentLoopHead;
+vector<int> loopHeads;
 
 /**
  * This map points to the start program line that a function starts.
@@ -414,7 +414,8 @@ bool compileStatement(){
         }
     }else if(firstToken.value=="while"){
         int startOfLoop=output.size();
-        currentLoopHead=startOfLoop;
+        loopHeads.push_back(startOfLoop);
+        breakLines.emplace_back();
 
         ensureNext("(");
         compileExpression();
@@ -424,7 +425,6 @@ bool compileStatement(){
         output.emplace_back(gJumpIf(TEMP,-1));
         int toChange=output.size()-1;
 
-        breakLines.emplace_back();
 
         compileStatement();
         output.emplace_back(gJump(startOfLoop));
@@ -435,6 +435,7 @@ bool compileStatement(){
             output[line].x=output.size();
         }
         breakLines.pop_back();
+        loopHeads.pop_back();
     }else if(firstToken.value=="var"){
         auto varName=lexer.getToken();
         ensure(varName,IDENTIFIER);
@@ -459,7 +460,9 @@ bool compileStatement(){
             localVarSize[varName.value]=1; //TODO for more types change this value
             currentTotalLocalVarSize+=localVarSize[varName.value];
             maximumTotalLocalVarSize=max(maximumTotalLocalVarSize,currentTotalLocalVarSize);
-            localVarStack.back().push_back(varName.value);
+            if(!localVarStack.empty()) {
+                localVarStack.back().push_back(varName.value);
+            }
             cout<<"Variable definition: "<<varName.value<<" in "<<currentFunction<<" assigned to "<<localVars[varName.value]<<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize<<endl;
         }
 
@@ -575,9 +578,16 @@ bool compileStatement(){
 
         ensureNext(";");
     }else if(firstToken.value=="continue") {
-        output.emplace_back(gJump(currentLoopHead));
+        if(loopHeads.empty()){
+            fail("Escaped continue outside of a loop");
+        }
+
+        output.emplace_back(gJump(loopHeads.back()));
         ensureNext(";");
     }else if(firstToken.value=="break"){
+        if(loopHeads.empty()){
+            fail("Escaped break outside of a loop");
+        }
         breakLines.back().push_back(output.size());
         output.emplace_back(gJump(-1));
         ensureNext(";");
