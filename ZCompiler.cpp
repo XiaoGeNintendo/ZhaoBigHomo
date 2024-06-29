@@ -188,36 +188,36 @@ void ValueExpression::compile(vector<Operation> &ops, int putAt) {
 
 vector<ExpressionLayerLogic> logics;
 
-Expression* compileExpression(int layer, int putAt);
+Expression* compileExpression(int layer);
 
 void initExpressionParsingModule(){
     ExpressionLayerLogic layerEqual=ExpressionLayerLogic(); //= += etc
     layerEqual.isSpecialLayer=true;
-    layerEqual.specialOp=[](int layer, int putAt)->Expression*{
+    layerEqual.specialOp=[](int layer)->Expression*{
         auto first=lexer.getToken();
         auto second=lexer.scryToken().value;
         if(isAnyOfAssignment(second)){
             ensure(first,IDENTIFIER);
             auto op=lexer.getToken();
-            Expression* right= compileExpression(layer,putAt+1);
+            Expression* right= compileExpression(layer);
             Expression* assignment=new AssignmentExpression(op,first.value,right);
             return assignment;
         }else{
             //oops seems not an assignment layer
             lexer.suckToken(first);
-            return compileExpression(layer+1,putAt);
+            return compileExpression(layer+1);
         }
     };
 
     ExpressionLayerLogic layerTrinary=ExpressionLayerLogic(); //?:
     layerTrinary.isSpecialLayer=true;
-    layerTrinary.specialOp=[](int layer, int putAt)->Expression*{
-        auto first=compileExpression(layer+1,putAt+1);
+    layerTrinary.specialOp=[](int layer)->Expression*{
+        auto first=compileExpression(layer+1);
         if(lexer.scryToken().value=="?"){
             lexer.getToken();
-            auto second= compileExpression(layer+1,putAt+2);
+            auto second= compileExpression(layer+1);
             ensureNext(":");
-            auto third= compileExpression(layer+1,putAt+3);
+            auto third= compileExpression(layer+1);
 
             return new TrinaryExpression(first,second,third);
         }else{
@@ -238,21 +238,21 @@ void initExpressionParsingModule(){
 
     ExpressionLayerLogic layerUnary=ExpressionLayerLogic();
     layerUnary.isSpecialLayer=true;
-    layerUnary.specialOp=[](int layer, int putAt)->Expression*{
+    layerUnary.specialOp=[](int layer)->Expression*{
         auto first=lexer.scryToken();
         if(first.value=="+" || first.value=="-"){
             lexer.getToken();
-            return new UnaryExpression(first, compileExpression(layer,putAt+1));
+            return new UnaryExpression(first, compileExpression(layer));
         }
-        return compileExpression(layer+1,putAt);
+        return compileExpression(layer+1);
     };
 
     ExpressionLayerLogic layerStuff=ExpressionLayerLogic();
     layerStuff.isSpecialLayer=true;
-    layerStuff.specialOp=[](int layer, int putAt)->Expression*{
+    layerStuff.specialOp=[](int layer)->Expression*{
         auto token=lexer.getToken();
         if(token.value=="("){
-            auto res= compileExpression(0,putAt+1);
+            auto res= compileExpression(0);
             ensureNext(")");
             return res;
         }else{
@@ -271,23 +271,23 @@ void initExpressionParsingModule(){
     logics={layerEqual,layerTrinary,layerLogicalOr,layerLogicalAnd,layerLogical,layerPlusMinus,layerMultipleDivide,layerUnary,layerStuff};
 }
 
-Expression* compileExpression(int layer, int putAt){
+Expression* compileExpression(int layer){
     if(layer>=logics.size()){
         fail("Internal Error: Expression logic layer overflow",CUSTOM_FAIL);
     }
 
     if(logics[layer].isSpecialLayer){
-        return logics[layer].specialOp(layer,putAt);
+        return logics[layer].specialOp(layer);
     }
 
     //use ordinary route
-    auto e=compileExpression(layer+1,putAt);
+    auto e=compileExpression(layer+1);
     vector<pair<Token,Expression*>> exp;
     exp.emplace_back(Token(),e);
     while(true){
         if(find(logics[layer].operators.begin(), logics[layer].operators.end(),lexer.scryToken().value)!=logics[layer].operators.end()){
             auto t=lexer.getToken();
-            auto ee= compileExpression(layer+1,putAt);
+            auto ee= compileExpression(layer+1);
             exp.emplace_back(t,ee);
         }else{
             break;
@@ -302,7 +302,7 @@ Expression* compileExpression(int layer, int putAt){
 }
 
 void compileExpression(){
-    auto exp= compileExpression(0,114514);
+    auto exp= compileExpression(0);
     exp->compile(output,2);
     output.emplace_back(gGetStack(TEMP,2));
     delete exp;

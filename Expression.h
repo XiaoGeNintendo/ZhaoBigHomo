@@ -77,8 +77,7 @@ public:
 struct ExpressionLayerLogic{
     vector<string> operators;
     bool isSpecialLayer;
-    bool isNullLayer;
-    function<Expression*(int layer,int putAt)> specialOp;
+    function<Expression*(int)> specialOp;
 };
 
 
