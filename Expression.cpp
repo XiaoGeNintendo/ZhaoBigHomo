@@ -83,6 +83,11 @@ BinaryExpression::~BinaryExpression() {
 }
 
 AssignmentExpression::~AssignmentExpression() {
+    delete left;
+    delete right;
+}
+
+FetchAddressExpression::~FetchAddressExpression(){
     delete right;
 }
 
@@ -133,3 +138,4 @@ void UnaryExpression::compile(vector<Operation> &ops, int putAt) {
 UnaryExpression::~UnaryExpression() {
     delete left;
 }
+

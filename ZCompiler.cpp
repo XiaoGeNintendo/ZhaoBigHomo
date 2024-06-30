@@ -16,6 +16,7 @@ using namespace std;
 #define NESTED_FUNCTION 14
 #define CUSTOM_FAIL 15
 #define KEYWORD_CLASH 16
+#define NOT_LVALUE 17
 
 Lexer lexer;
 ofstream outStream;
@@ -64,6 +65,10 @@ inline void throwNested(const string& s){
 inline void throwKeyword(const string& s) {
     cerr << "Error: [Line " << lexer.line << "] Name " << s << " is reserved and should not be used." << endl;
     exit(KEYWORD_CLASH);
+}
+
+inline void throwNotLvalue(){
+    fail("Invalid left-hand side in expression or non-memorable expression.",NOT_LVALUE);
 }
 
 /**
@@ -156,26 +161,18 @@ int Variable::getSize() {
  * x=3>5?7:-30+4>>3
  */
 
+void Expression::compileAsLvalue(vector<Operation> &ops, int putAt) {
+    throwNotLvalue();
+}
+
 void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
     right->compile(ops,putAt+1);
 
     //TEMP will point to the value we want to set
-    int flag=0;
-    if(localVars.count(left)){ //local variable
-        flag=1;
-        ops.emplace_back(gCopy(STACK_START,TEMP));
-        ops.emplace_back(gSet(TEMP+1,localVars[left].offset));
-        ops.emplace_back(gMinus(TEMP,TEMP+1,TEMP));
-    }else if(globalVars.count(left)){
-        flag=2;
-        ops.emplace_back(gSet(TEMP,globalVars[left].offset+GLOBAL_START));
-    }
+    left->compileAsLvalue(ops,putAt+2);
+    ops.emplace_back(gGetStack(TEMP,putAt+2));
     //TEMP+1 now holds the right value
     ops.emplace_back(gGetStack(TEMP+1,putAt+1));
-
-    if(flag==0){
-        throwUndefined(left,"assignment expression");
-    }
 
     if(op.value=="="){
         //do nothing
@@ -204,18 +201,7 @@ void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
 }
 
 void FetchAddressExpression::compile(vector<Operation> &ops, int putAt){
-    if(globalVars.count(identifier)){
-        //global variable
-        ops.emplace_back(gSet(TEMP,globalVars[identifier].offset+GLOBAL_START));
-        ops.emplace_back(gSetStack(TEMP,putAt));
-    }else if(localVars.count(identifier)){
-        //local variable
-        ops.emplace_back(gSet(TEMP,localVars[identifier].offset));
-        ops.emplace_back(gMinus(STACK_START,TEMP,TEMP));
-        ops.emplace_back(gSetStack(TEMP,putAt));
-    }else{
-        throwUndefined(identifier,"fetch address expression");
-    }
+    right->compileAsLvalue(ops,putAt);
 }
 
 void ValueExpression::compile(vector<Operation> &ops, int putAt) {
@@ -272,26 +258,49 @@ void ValueExpression::compile(vector<Operation> &ops, int putAt) {
     }
 }
 
+void ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
+    if(token.type!=IDENTIFIER){
+        throwNotLvalue();
+    }
+    if(isFunction){
+        throwNotLvalue();
+    }
+    if(globalVars.count(token.value)){
+        ops.emplace_back(gSet(TEMP,GLOBAL_START+globalVars[token.value].offset));
+    }else if(localVars.count(token.value)){
+        ops.emplace_back(gSet(TEMP,localVars[token.value].offset));
+        ops.emplace_back(gMinus(STACK_START,TEMP,TEMP));
+    }
+    ops.emplace_back(gSetStack(TEMP,putAt));
+}
+
+void UnaryExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
+    if(op.value!="["){
+        throwNotLvalue();
+    }
+    left->compile(ops,putAt);
+}
+
 vector<ExpressionLayerLogic> logics;
 
 Expression* compileExpression(int layer);
+
 
 void initExpressionParsingModule(){
     ExpressionLayerLogic layerEqual=ExpressionLayerLogic(); //= += etc
     layerEqual.isSpecialLayer=true;
     layerEqual.specialOp=[](int layer)->Expression*{
-        auto first=lexer.getToken();
+        auto first= compileExpression(layer+1);
         auto second=lexer.scryToken().value;
         if(isAnyOfAssignment(second)){
-            ensure(first,IDENTIFIER);
+
             auto op=lexer.getToken();
-            Expression* right= compileExpression(layer);
-            Expression* assignment=new AssignmentExpression(op,first.value,right);
+            Expression* right=compileExpression(layer);
+            Expression* assignment=new AssignmentExpression(op,first,right);
             return assignment;
         }else{
             //oops seems not an assignment layer
-            lexer.suckToken(first);
-            return compileExpression(layer+1);
+            return first;
         }
     };
 
@@ -348,8 +357,7 @@ void initExpressionParsingModule(){
             return new UnaryExpression(token, exp);
         }else if(token.value=="&"){
             //fetch address of a variable
-            auto ind=lexer.getToken();
-            ensure(ind,IDENTIFIER);
+            auto ind= compileExpression(layer);
             return new FetchAddressExpression(ind);
         }else{
             //maybe a function or an identifier

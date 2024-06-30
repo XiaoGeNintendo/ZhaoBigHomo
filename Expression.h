@@ -20,6 +20,8 @@ public:
      * @param putAt
      */
      virtual void compile(vector<Operation>& ops, int putAt)=0;
+
+     virtual void compileAsLvalue(vector<Operation>& ops, int putAt);
      /**
       * CompilerTypes check the given function and returns the final type
       */
@@ -46,6 +48,8 @@ public:
     bool isFunction;
     explicit ValueExpression(Token token,bool isFunction):token(token),isFunction(isFunction){}
     void compile(vector<Operation> &ops, int putAt) override;
+
+    void compileAsLvalue(vector<Operation> &ops, int putAt) override;
 };
 
 class UnaryExpression:public Expression{
@@ -55,15 +59,19 @@ public:
 
     UnaryExpression(Token op, Expression* left):op(op),left(left){}
     void compile(vector<Operation> &ops, int putAt) override;
+    void compileAsLvalue(vector<Operation> &ops, int putAt) override;
+
     ~UnaryExpression() override;
 };
 
 class FetchAddressExpression:public Expression{
 public:
-    string identifier;
-    explicit FetchAddressExpression(Token op):identifier(op.value){}
+    Expression* right;
+    explicit FetchAddressExpression(Expression* right):right(right){}
     void compile(vector<Operation> &ops, int putAt) override;
+    ~FetchAddressExpression() override;
 };
+
 class TrinaryExpression:public Expression{
 public:
     Expression* q;
@@ -80,8 +88,8 @@ class AssignmentExpression:public Expression{
 public:
     Token op;
     Expression* right;
-    string left;
-    AssignmentExpression(Token op, string left, Expression* right):op(op),left(left),right(right){}
+    Expression* left;
+    AssignmentExpression(Token op, Expression* left, Expression* right):op(op),left(left),right(right){}
     void compile(vector<Operation> &ops, int putAt) override;
     ~AssignmentExpression() override;
 };
