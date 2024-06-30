@@ -58,6 +58,12 @@ public:
     ~UnaryExpression() override;
 };
 
+class FetchAddressExpression:public Expression{
+public:
+    string identifier;
+    explicit FetchAddressExpression(Token op):identifier(op.value){}
+    void compile(vector<Operation> &ops, int putAt) override;
+};
 class TrinaryExpression:public Expression{
 public:
     Expression* q;

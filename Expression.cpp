@@ -120,6 +120,12 @@ void UnaryExpression::compile(vector<Operation> &ops, int putAt) {
     ops.emplace_back(gGetStack(TEMP,putAt+1));
     if(op.value=="-"){
         ops.emplace_back(gMinus(0,TEMP,TEMP));
+    }else if(op.value=="["){
+        ops.emplace_back(gArrayGet(TEMP,0,TEMP));
+    }else if(op.value=="+"){
+        //do nothing
+    }else{
+        assert(false);
     }
     ops.emplace_back(gSetStack(TEMP,putAt));
 }

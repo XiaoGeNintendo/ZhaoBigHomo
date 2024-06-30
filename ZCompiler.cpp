@@ -6,6 +6,8 @@
 #include "FakeAssembly.h"
 #include "FakeAssemblyBuilder.h"
 #include "Expression.h"
+#include "CompilerTypes.h"
+
 using namespace std;
 
 #define EXPECTED_BUT_FOUND 11
@@ -70,21 +72,24 @@ inline void throwKeyword(const string& s) {
 vector<Operation> output;
 
 
+/**
+ * Store all type information
+ */
+map<string,Type> types;
+
 string currentFunction;
 /**
  * If globalVars[s]=X, then variable s is stored at GLOBAL_START+X
  */
-map<string,int> globalVars;
+map<string,Variable> globalVars;
+int globalVarSize;
+
 /**
  * The local vars location in the current function. If localVars[s]=X, then the address MEM[STACK_START]-X holds the wanted variable
  *
  * Note that 0 should not occur in this map
  */
-map<string,int> localVars;
-/**
- * Holds the size of each local variable.
- */
-map<string,int> localVarSize;
+map<string,Variable> localVars;
 int currentTotalLocalVarSize,maximumTotalLocalVarSize;
 /**
  * Used as a stack. Each element holds the local variables defined in that block of {}
@@ -114,6 +119,27 @@ map<string,int> functionPointers;
  */
 vector<int> returnPostProcess;
 
+//============================================================Variable related thingy
+int Type::getSize() {
+    if(size!=-1){
+        return size;
+    }
+    int sm=0;
+    for(const auto& var:fields){
+        sm+=types[var.second].getSize();
+    }
+    return size=sm;
+}
+
+int Variable::getSize() {
+    if(size!=-1){
+        return size;
+    }
+    return size=types[type].getSize();
+}
+
+
+
 //============================================================Expression related thingy
 /*
  * Expression priority:
@@ -138,11 +164,11 @@ void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
     if(localVars.count(left)){ //local variable
         flag=1;
         ops.emplace_back(gCopy(STACK_START,TEMP));
-        ops.emplace_back(gSet(TEMP+1,localVars[left]));
+        ops.emplace_back(gSet(TEMP+1,localVars[left].offset));
         ops.emplace_back(gMinus(TEMP,TEMP+1,TEMP));
     }else if(globalVars.count(left)){
         flag=2;
-        ops.emplace_back(gSet(TEMP,globalVars[left]+GLOBAL_START));
+        ops.emplace_back(gSet(TEMP,globalVars[left].offset+GLOBAL_START));
     }
     //TEMP+1 now holds the right value
     ops.emplace_back(gGetStack(TEMP+1,putAt+1));
@@ -175,7 +201,21 @@ void AssignmentExpression::compile(vector<Operation> &ops, int putAt){
 
     ops.emplace_back(gArraySet(TEMP+1,0,TEMP));
     ops.emplace_back(gSetStack(TEMP+1,putAt));
+}
 
+void FetchAddressExpression::compile(vector<Operation> &ops, int putAt){
+    if(globalVars.count(identifier)){
+        //global variable
+        ops.emplace_back(gSet(TEMP,globalVars[identifier].offset+GLOBAL_START));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+    }else if(localVars.count(identifier)){
+        //local variable
+        ops.emplace_back(gSet(TEMP,localVars[identifier].offset));
+        ops.emplace_back(gMinus(STACK_START,TEMP,TEMP));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+    }else{
+        throwUndefined(identifier,"fetch address expression");
+    }
 }
 
 void ValueExpression::compile(vector<Operation> &ops, int putAt) {
@@ -217,10 +257,10 @@ void ValueExpression::compile(vector<Operation> &ops, int putAt) {
 
             //just a normal variable
             if (globalVars.count(token.value)) {
-                int loc = globalVars[token.value];
+                int loc = globalVars[token.value].offset;
                 ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
             } else if (localVars.count(token.value)) {
-                int loc = localVars[token.value];
+                int loc = localVars[token.value].offset;
                 ops.emplace_back(gGetStack(TEMP, loc));
                 ops.emplace_back(gSetStack(TEMP, putAt));
             } else {
@@ -293,7 +333,7 @@ void initExpressionParsingModule(){
         return compileExpression(layer+1);
     };
 
-    ExpressionLayerLogic layerStuff=ExpressionLayerLogic();
+    ExpressionLayerLogic layerStuff=ExpressionLayerLogic(); //the layer for integers, identifiers, function calling.
     layerStuff.isSpecialLayer=true;
     layerStuff.specialOp=[](int layer)->Expression*{
         auto token=lexer.getToken();
@@ -301,7 +341,18 @@ void initExpressionParsingModule(){
             auto res= compileExpression(0);
             ensureNext(")");
             return res;
+        }else if(token.value=="[") {
+            //this is a get memory operation. Wow! Different from C/C++ syntax! Cool!!!
+            auto exp = compileExpression(0);
+            ensureNext("]");
+            return new UnaryExpression(token, exp);
+        }else if(token.value=="&"){
+            //fetch address of a variable
+            auto ind=lexer.getToken();
+            ensure(ind,IDENTIFIER);
+            return new FetchAddressExpression(ind);
         }else{
+            //maybe a function or an identifier
             bool function=false;
             if(lexer.scryToken().value=="("){
                 //oh! function calling
@@ -380,12 +431,12 @@ bool compileStatement(){
         ensure(secondToken,IDENTIFIER);
         if(localVars.count(secondToken.value)){
             //it's a local variable
-            int relativePosition=localVars[secondToken.value];
+            int relativePosition=localVars[secondToken.value].offset;
             output.emplace_back(gInput());
             output.emplace_back(gSetStack(INPUT_TEMP,relativePosition));
         }else if(globalVars.count(secondToken.value)){
             //it's a global variable
-            int position=globalVars[secondToken.value];
+            int position=globalVars[secondToken.value].offset;
             output.emplace_back(gInput());
             output.emplace_back(gCopy(INPUT_TEMP,GLOBAL_START+position));
         }else{
@@ -451,21 +502,33 @@ bool compileStatement(){
                 throwDuplicate(varName.value,"global");
             }
 
-            globalVars[varName.value]=globalVars.size();
+            Variable var=Variable();
+            var.offset=globalVarSize;
+            var.type="int";
+            globalVarSize+=var.getSize();
+
+            globalVars[varName.value]=var;
         }else{
             //it's a local variable
             if(localVars.count(varName.value)){
                 throwDuplicate(varName.value,currentFunction);
             }
 
-            localVars[varName.value]=currentTotalLocalVarSize+1;
-            localVarSize[varName.value]=1; //TODO for more types change this value
-            currentTotalLocalVarSize+=localVarSize[varName.value];
+            Variable var=Variable();
+            var.offset=currentTotalLocalVarSize+1;
+            var.type="int";
+            currentTotalLocalVarSize+=var.getSize(); //pre-generate its size
+            localVars[varName.value]=var;
             maximumTotalLocalVarSize=max(maximumTotalLocalVarSize,currentTotalLocalVarSize);
             if(!localVarStack.empty()) {
                 localVarStack.back().push_back(varName.value);
             }
-            cout<<"Variable definition: "<<varName.value<<" in "<<currentFunction<<" assigned to "<<localVars[varName.value]<<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize<<endl;
+
+            cout<<"Variable definition: "<<varName.value<<" in "<<currentFunction
+            <<" assigned to "<<localVars[varName.value].offset
+            <<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize
+            <<" Type:"<<localVars[varName.value].type
+            <<" Size:"<<localVars[varName.value].size<<endl;
         }
 
         //give it a default value
@@ -474,10 +537,10 @@ bool compileStatement(){
             compileExpression();
             if(currentFunction==""){
                 //global variable
-                output.emplace_back(gCopy(TEMP,GLOBAL_START+globalVars[varName.value]));
+                output.emplace_back(gCopy(TEMP,GLOBAL_START+globalVars[varName.value].offset));
             }else{
                 //local variable
-                output.emplace_back(gSetStack(TEMP,localVars[varName.value]));
+                output.emplace_back(gSetStack(TEMP,localVars[varName.value].offset));
             }
         }
         ensureNext(";");
@@ -495,9 +558,8 @@ bool compileStatement(){
 
         //clear all local variable in this layer
         for(const string& name:localVarStack.back()){
-            currentTotalLocalVarSize-=localVarSize[name];
+            currentTotalLocalVarSize-=localVars[name].size;
             localVars.erase(name);
-            localVarSize.erase(name);
         }
         localVarStack.pop_back();
 
@@ -524,9 +586,9 @@ bool compileStatement(){
         currentFunction=funcName.value;
         localVars.clear();
         returnPostProcess.clear();
-        localVars["%RETURN_ADDRESS%"]=1;
+        localVars["%RETURN_ADDRESS%"]=Variable(1);
         for(int i=1;i<=TEMP_VAR_COUNT;i++){
-            localVars["%TEMP"+to_string(i)+"%"]=i+1;
+            localVars["%TEMP"+to_string(i)+"%"]=Variable(i+1);
         }
         maximumTotalLocalVarSize=currentTotalLocalVarSize=localVars.size();
 
@@ -609,6 +671,7 @@ int main(int argc, char** argv){
         exit(1);
     }
 
+    types["int"]=Type(1);
     initExpressionParsingModule();
 
     lexer.open(argv[1]);
