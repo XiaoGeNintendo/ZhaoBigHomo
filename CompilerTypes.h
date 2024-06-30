@@ -10,25 +10,15 @@ using namespace std;
 struct Function{
     int startLocation;
     /**
+     * Needs to be manually set!!
+     */
+    int parameterTotalSize,parameterOffset;
+    /**
      * Name, Type
      */
     vector<pair<string,string>> parameters;
     string returnType;
-};
 
-struct Type{
-    Type() = default;
-    /**
-     * Create a primitive type with the given size. This type has no fields or functions.
-     * @param size
-     */
-    explicit Type(int size){
-        this->size=size;
-    }
-    int size=-1;
-    map<string,string> fields;
-    map<string,Function> functions;
-    int getSize();
 };
 
 struct Variable{
@@ -42,13 +32,11 @@ struct Variable{
     explicit Variable(int offset){
         this->offset=offset;
         this->type="int";
-        this->size=1;
     }
 
+    explicit Variable(int offset, std::string type):offset(offset),type(type){}
     int offset;
     std::string type;
-    int size=-1;
-    int getSize();
 };
 
 #endif //ZHAOBIGHOMO_COMPILERTYPES_H

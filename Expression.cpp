@@ -139,3 +139,8 @@ UnaryExpression::~UnaryExpression() {
     delete left;
 }
 
+FunctionExpression::~FunctionExpression(){
+    for(auto t:parameters){
+        delete t;
+    }
+}

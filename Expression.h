@@ -45,13 +45,21 @@ public:
 class ValueExpression: public Expression{
 public:
     Token token;
-    bool isFunction;
-    explicit ValueExpression(Token token,bool isFunction):token(token),isFunction(isFunction){}
+    explicit ValueExpression(Token token):token(token){}
     void compile(vector<Operation> &ops, int putAt) override;
 
     void compileAsLvalue(vector<Operation> &ops, int putAt) override;
 };
 
+class FunctionExpression: public Expression{
+public:
+    string call;
+    vector<Expression*> parameters;
+    FunctionExpression(string call, vector<Expression*> parameters):call(call),parameters(parameters){}
+    void compile(vector<Operation> &ops, int putAt) override;
+    ~FunctionExpression() override;
+
+};
 class UnaryExpression:public Expression{
 public:
     Token op;

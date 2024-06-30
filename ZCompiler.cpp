@@ -76,12 +76,6 @@ inline void throwNotLvalue(){
  */
 vector<Operation> output;
 
-
-/**
- * Store all type information
- */
-map<string,Type> types;
-
 string currentFunction;
 /**
  * If globalVars[s]=X, then variable s is stored at GLOBAL_START+X
@@ -114,7 +108,7 @@ vector<int> loopHeads;
 /**
  * This map points to the start program line that a function starts.
  */
-map<string,int> functionPointers;
+map<string,Function> functions;
 
 /**
  * Return in functions do not know how many local variables are there in the function, therefore they do not know how much
@@ -125,25 +119,8 @@ map<string,int> functionPointers;
 vector<int> returnPostProcess;
 
 //============================================================Variable related thingy
-int Type::getSize() {
-    if(size!=-1){
-        return size;
-    }
-    int sm=0;
-    for(const auto& var:fields){
-        sm+=types[var.second].getSize();
-    }
-    return size=sm;
-}
 
-int Variable::getSize() {
-    if(size!=-1){
-        return size;
-    }
-    return size=types[type].getSize();
-}
-
-
+//nothing here :)
 
 //============================================================Expression related thingy
 /*
@@ -204,55 +181,62 @@ void FetchAddressExpression::compile(vector<Operation> &ops, int putAt){
     right->compileAsLvalue(ops,putAt);
 }
 
+void FunctionExpression::compile(vector<Operation> &ops, int putAt){
+
+    if(!functions.count(call)){
+        throwUndefined(call,"value expression (function calling)");
+    }
+
+    //copy parameter
+    auto& func=functions[call];
+    if(parameters.size()!=func.parameters.size()){
+        fail("Parameter count does not match.");
+    }
+
+    for(int i=0;i<parameters.size();i++){
+        parameters[i]->compile(ops,putAt+1+i);
+    }
+
+    int nowAt=2;
+    for(int i=0;i<parameters.size();i++){
+        ops.emplace_back(gGetStack(TEMP+nowAt,putAt+1+i));
+        nowAt++;
+    }
+
+    ops.emplace_back(gSet(TEMP,-1)); //set jump back position
+    int toChange=ops.size()-1;
+    ops.emplace_back(gJump(functions[call].startLocation));
+    ops[toChange].x=ops.size();
+    ops.emplace_back(gSetStack(TEMP,putAt));
+}
 void ValueExpression::compile(vector<Operation> &ops, int putAt) {
     if(token.type==INTEGER){
-        if(isFunction){
-            warn("Arrr, a mighty fine notion ye be havin' there to be callin' an integer!");
-        }
         ops.emplace_back(gSet(TEMP,stoi(token.value)));
         ops.emplace_back(gSetStack(TEMP,putAt));
     }else if(token.type==IDENTIFIER){
-        if(isFunction){
-            //call a function
-
-            //again special judge in true and false
-            if(token.value=="true" || token.value=="false"){
-                fail("true/false is not callable.");
-            }
-
-            if(!functionPointers.count(token.value)){
-                throwUndefined(token.value,"value expression (function calling)");
-            }
-
-            int backPos=ops.size()+2;
-            ops.emplace_back(gSet(TEMP,backPos));
-            ops.emplace_back(gJump(functionPointers[token.value]));
+        //check for special case: true and false
+        if(token.value=="true"){
+            ops.emplace_back(gSet(TEMP,1));
             ops.emplace_back(gSetStack(TEMP,putAt));
-        }else {
-
-            //check for special case: true and false
-            if(token.value=="true"){
-                ops.emplace_back(gSet(TEMP,1));
-                ops.emplace_back(gSetStack(TEMP,putAt));
-                return;
-            }else if(token.value=="false"){
-                ops.emplace_back(gSet(TEMP,0));
-                ops.emplace_back(gSetStack(TEMP,putAt));
-                return;
-            }
-
-            //just a normal variable
-            if (globalVars.count(token.value)) {
-                int loc = globalVars[token.value].offset;
-                ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
-            } else if (localVars.count(token.value)) {
-                int loc = localVars[token.value].offset;
-                ops.emplace_back(gGetStack(TEMP, loc));
-                ops.emplace_back(gSetStack(TEMP, putAt));
-            } else {
-                throwUndefined(token.value, "value expression");
-            }
+            return;
+        }else if(token.value=="false"){
+            ops.emplace_back(gSet(TEMP,0));
+            ops.emplace_back(gSetStack(TEMP,putAt));
+            return;
         }
+
+        //just a normal variable
+        if (globalVars.count(token.value)) {
+            int loc = globalVars[token.value].offset;
+            ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
+        } else if (localVars.count(token.value)) {
+            int loc = localVars[token.value].offset;
+            ops.emplace_back(gGetStack(TEMP, loc));
+            ops.emplace_back(gSetStack(TEMP, putAt));
+        } else {
+            throwUndefined(token.value, "value expression");
+        }
+
     }else{
         fail("Expected INTEGER or IDENTIFIER in value expression",EXPECTED_BUT_FOUND);
     }
@@ -260,9 +244,6 @@ void ValueExpression::compile(vector<Operation> &ops, int putAt) {
 
 void ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
     if(token.type!=IDENTIFIER){
-        throwNotLvalue();
-    }
-    if(isFunction){
         throwNotLvalue();
     }
     if(globalVars.count(token.value)){
@@ -360,16 +341,27 @@ void initExpressionParsingModule(){
             auto ind= compileExpression(layer);
             return new FetchAddressExpression(ind);
         }else{
-            //maybe a function or an identifier
-            bool function=false;
             if(lexer.scryToken().value=="("){
                 //oh! function calling
-                //TODO parameter function
-                ensureNext("(");
-                ensureNext(")");
-                function=true;
+                lexer.getToken(); //(
+                vector<Expression*> parameters;
+                while(true){
+                    if(lexer.scryToken().value==")"){
+                        lexer.getToken();
+                        break;
+                    }
+                    parameters.emplace_back(compileExpression(0));
+                    if(lexer.scryToken().value==","){
+                        lexer.getToken();
+                    }
+                }
+
+                return new FunctionExpression(token.value,parameters);
+            }else{
+                //regular token
+                return new ValueExpression(token);
             }
-            return new ValueExpression(token,function);
+
         }
     };
 
@@ -421,7 +413,7 @@ void checkVariableAvailability(const string& name){
     if(name=="true" || name=="false"){
         throwKeyword(name);
     }
-    if(name=="var" || name=="def" || name=="if" || name=="while"){
+    if(name=="var" || name=="def" || name=="if" || name=="while" || name=="input" || name=="output"){
         warn(name+" collides with important keyword. This may cause potential issues.");
     }
 }
@@ -473,8 +465,8 @@ bool compileStatement(){
             compileStatement();
             output[toChange2].x=output.size();
         }
-    }else if(firstToken.value=="while"){
-        int startOfLoop=output.size();
+    }else if(firstToken.value=="while") {
+        int startOfLoop = output.size();
         loopHeads.push_back(startOfLoop);
         breakLines.emplace_back();
 
@@ -482,18 +474,17 @@ bool compileStatement(){
         compileExpression();
         ensureNext(")");
 
-        output.emplace_back(gNot(TEMP,TEMP));
-        output.emplace_back(gJumpIf(TEMP,-1));
-        int toChange=output.size()-1;
-
+        output.emplace_back(gNot(TEMP, TEMP));
+        output.emplace_back(gJumpIf(TEMP, -1));
+        int toChange = output.size() - 1;
 
         compileStatement();
         output.emplace_back(gJump(startOfLoop));
-        output[toChange].y=output.size();
+        output[toChange].y = output.size();
 
         //change all break statement
-        for(int line:breakLines.back()){
-            output[line].x=output.size();
+        for (int line: breakLines.back()) {
+            output[line].x = output.size();
         }
         breakLines.pop_back();
         loopHeads.pop_back();
@@ -513,7 +504,7 @@ bool compileStatement(){
             Variable var=Variable();
             var.offset=globalVarSize;
             var.type="int";
-            globalVarSize+=var.getSize();
+            globalVarSize++;
 
             globalVars[varName.value]=var;
         }else{
@@ -525,7 +516,7 @@ bool compileStatement(){
             Variable var=Variable();
             var.offset=currentTotalLocalVarSize+1;
             var.type="int";
-            currentTotalLocalVarSize+=var.getSize(); //pre-generate its size
+            currentTotalLocalVarSize++; //pre-generate its size
             localVars[varName.value]=var;
             maximumTotalLocalVarSize=max(maximumTotalLocalVarSize,currentTotalLocalVarSize);
             if(!localVarStack.empty()) {
@@ -535,8 +526,7 @@ bool compileStatement(){
             cout<<"Variable definition: "<<varName.value<<" in "<<currentFunction
             <<" assigned to "<<localVars[varName.value].offset
             <<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize
-            <<" Type:"<<localVars[varName.value].type
-            <<" Size:"<<localVars[varName.value].size<<endl;
+            <<" Type:"<<localVars[varName.value].type<<endl;
         }
 
         //give it a default value
@@ -566,13 +556,15 @@ bool compileStatement(){
 
         //clear all local variable in this layer
         for(const string& name:localVarStack.back()){
-            currentTotalLocalVarSize-=localVars[name].size;
+            currentTotalLocalVarSize--;
             localVars.erase(name);
         }
         localVarStack.pop_back();
 
     }else if(firstToken.value=="def"){
+        Function func=Function();
 
+        //Read function name
         auto funcName=lexer.getToken();
         ensure(funcName,IDENTIFIER);
 
@@ -582,13 +574,31 @@ bool compileStatement(){
         if(currentFunction!=""){ //check not nested function
             throwNested(funcName.value);
         }
-        if(functionPointers.count(funcName.value)){
+        if(functions.count(funcName.value)){
             throwDuplicate(funcName.value,"functions");
         }
 
+        //Add parameters
         ensureNext("(");
-        //TODO parameter function
-        ensureNext(")");
+        while(true){
+            if(lexer.scryToken().value==")"){
+                lexer.getToken();
+                break;
+            }
+            auto name=lexer.getToken();
+            ensure(name,IDENTIFIER);
+            string type="int";
+            if(lexer.scryToken().value==":"){
+                auto typeToken=lexer.getToken();
+                ensure(typeToken,IDENTIFIER);
+                type=typeToken.value;
+            }
+            func.parameters.emplace_back(name.value,type);
+
+            if(lexer.scryToken().value==","){
+                lexer.getToken();
+            }
+        }
 
         //initialize local variables
         currentFunction=funcName.value;
@@ -600,9 +610,22 @@ bool compileStatement(){
         }
         maximumTotalLocalVarSize=currentTotalLocalVarSize=localVars.size();
 
+        //initialize parameter
+        func.parameterTotalSize=0;
+        func.parameterOffset=currentTotalLocalVarSize+1;
+        for(auto para:func.parameters){
+            localVars[para.first]=Variable(currentTotalLocalVarSize+1,para.second);
+            currentTotalLocalVarSize++;
+            maximumTotalLocalVarSize++;
+            func.parameterTotalSize++;
+        }
+
         output.emplace_back(gJump(-1)); //to prevent the code being executed when just defined
         int toFinalChange=output.size()-1;
-        functionPointers[currentFunction]=output.size();
+
+        func.startLocation=output.size();
+        func.returnType="int";
+        functions[currentFunction]=func;
         output.emplace_back(gJump(-1)); //prepare to jump to initial code first
         int toChange=output.size()-1;
         int backTo=output.size();
@@ -625,6 +648,10 @@ bool compileStatement(){
         output.emplace_back(gSet(TEMP+1,maximumTotalLocalVarSize));
         output.emplace_back(gAdd(STACK_START,TEMP+1,STACK_START)); //add stack_start by the memory needed
         output.emplace_back(gSetStack(TEMP,1)); //retrieve the return position
+        for(int i=0;i<func.parameterTotalSize;i++){ //copy parameters primitively
+            output.emplace_back(gSetStack(TEMP+2+i,func.parameterOffset+i));
+        }
+
         output.emplace_back(gJump(backTo)); //jump back
 
         output[toFinalChange].x=output.size();
@@ -679,13 +706,12 @@ int main(int argc, char** argv){
         exit(1);
     }
 
-    types["int"]=Type(1);
     initExpressionParsingModule();
 
     lexer.open(argv[1]);
     outStream=ofstream(argv[2]);
     output.emplace_back(gSet(1,1));
-    output.emplace_back(gSet(STACK_START,STACK_START+50));
+    output.emplace_back(gSet(STACK_START,STACK_START+TEMP_VAR_COUNT));
     while(true){
         bool res=compileStatement();
         if(!res){
@@ -693,12 +719,12 @@ int main(int argc, char** argv){
         }
     }
 
-    if(!functionPointers.count("main")){
+    if(!functions.count("main")){
         warn("No main function declared. Will not attempt to call main when start up.");
     }else{
         //call main function
         output.emplace_back(gSet(TEMP,output.size()+2));
-        output.emplace_back(gJump(functionPointers["main"]));
+        output.emplace_back(gJump(functions["main"].startLocation));
     }
 
     int count=0;
