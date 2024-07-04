@@ -5,7 +5,7 @@
 //return the next char. fetch a new char
 char Lexer::next(){
 
-    while(!(isalpha(fw) || isdigit(fw) || isop(fw) || fw==EOF)){
+    while(!(isalpha_(fw) || isdigit(fw) || isop(fw) || fw==EOF)){
         if(fw=='\n'){
             line++;
         }
