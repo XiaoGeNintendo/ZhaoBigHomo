@@ -22,12 +22,14 @@ const int GLOBAL_START=5000;
  * MEM[STACK_START] points to the first empty space in stack space
  */
 const int STACK_START=10000;
-const int STACK_HEAD=STACK_START-1;
 const int INPUT_TEMP=4999;
 const int OUTPUT_TEMP=4998;
-const int LOCAL_INDEX_CACHE=3000;
 const int TEMP=100;
 const int TEMP_VAR_COUNT=50;
+/**
+ * The location in stack to hold the "this" variable
+ */
+const int THIS_LOCATION=TEMP_VAR_COUNT+2;
 const int CLASS_RESERVED=10;
 
 /**

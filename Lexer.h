@@ -40,7 +40,7 @@ struct Token{
 };
 inline bool isop(int c) {
     static const set<char> operators = {
-            '+', '-', '*', '/', '%', '=', ';', '?', ':', '>', '<', '(', ')', '{', '}', '!', '&', '|', '[',']'
+            '+', '-', '*', '/', '%', '=', ';', '?', ':', '>', '<', '(', ')', '{', '}', '!', '&', '|', '[',']','.'
     };
     return operators.find(c) != operators.end();
 }

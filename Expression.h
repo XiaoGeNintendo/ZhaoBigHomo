@@ -18,10 +18,12 @@ public:
      * You MUST not use any memory before putAt
      * @param ops
      * @param putAt
+     *
+     * @return the type of the expression
      */
-     virtual void compile(vector<Operation>& ops, int putAt)=0;
+     virtual string compile(vector<Operation>& ops, int putAt)=0;
 
-     virtual void compileAsLvalue(vector<Operation>& ops, int putAt);
+     virtual string compileAsLvalue(vector<Operation>& ops, int putAt);
      /**
       * CompilerTypes check the given function and returns the final type
       */
@@ -32,23 +34,27 @@ public:
 };
 
 class BinaryExpression:public Expression{
+private:
+    string compileDot(vector<Operation> &ops, int putAt, bool lvalue);
 public:
     Token op;
     Expression* left;
     Expression* right;
 
     BinaryExpression(Token op, Expression* left, Expression* right):op(op),left(left),right(right){}
-    void compile(vector<Operation> &ops, int putAt) override;
+    string compile(vector<Operation> &ops, int putAt) override;
+    string compileAsLvalue(vector<Operation> &ops, int putAt) override;
     ~BinaryExpression() override;
+
 };
 
 class ValueExpression: public Expression{
 public:
     Token token;
     explicit ValueExpression(Token token):token(token){}
-    void compile(vector<Operation> &ops, int putAt) override;
+    string compile(vector<Operation> &ops, int putAt) override;
 
-    void compileAsLvalue(vector<Operation> &ops, int putAt) override;
+    string compileAsLvalue(vector<Operation> &ops, int putAt) override;
 };
 
 class FunctionExpression: public Expression{
@@ -56,18 +62,19 @@ public:
     string call;
     vector<Expression*> parameters;
     FunctionExpression(string call, vector<Expression*> parameters):call(call),parameters(parameters){}
-    void compile(vector<Operation> &ops, int putAt) override;
+    string compile(vector<Operation> &ops, int putAt) override;
     ~FunctionExpression() override;
-
 };
+
+
 class UnaryExpression:public Expression{
 public:
     Token op;
     Expression* left;
 
     UnaryExpression(Token op, Expression* left):op(op),left(left){}
-    void compile(vector<Operation> &ops, int putAt) override;
-    void compileAsLvalue(vector<Operation> &ops, int putAt) override;
+    string compile(vector<Operation> &ops, int putAt) override;
+    string compileAsLvalue(vector<Operation> &ops, int putAt) override;
 
     ~UnaryExpression() override;
 };
@@ -76,7 +83,7 @@ class FetchAddressExpression:public Expression{
 public:
     Expression* right;
     explicit FetchAddressExpression(Expression* right):right(right){}
-    void compile(vector<Operation> &ops, int putAt) override;
+    string compile(vector<Operation> &ops, int putAt) override;
     ~FetchAddressExpression() override;
 };
 
@@ -88,7 +95,7 @@ public:
 
     TrinaryExpression(Expression* q, Expression* t,Expression* f):q(q),t(t),f(f){}
 
-    void compile(vector<Operation> &ops, int putAt) override;
+    string compile(vector<Operation> &ops, int putAt) override;
     ~TrinaryExpression() override;
 };
 
@@ -98,9 +105,10 @@ public:
     Expression* right;
     Expression* left;
     AssignmentExpression(Token op, Expression* left, Expression* right):op(op),left(left),right(right){}
-    void compile(vector<Operation> &ops, int putAt) override;
+    string compile(vector<Operation> &ops, int putAt) override;
     ~AssignmentExpression() override;
 };
+
 struct ExpressionLayerLogic{
     vector<string> operators;
     bool isSpecialLayer;
