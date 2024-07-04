@@ -53,12 +53,12 @@ inline void throwUndefined(const string& s,const string& process="unknown"){
 }
 
 inline void throwDuplicate(const string& s,const string& process="unknown"){
-    cerr<<"Error: [Line "<<lexer.line<<"] Duplicated variable name:"<<s<<" in "<<process<<endl;
+    cerr<<"Error: [Line "<<lexer.line<<"] Duplicated name: "<<s<<" in "<<process<<endl;
     exit(DUPLICATE_SYMBOL);
 }
 
 inline void throwNested(const string& s){
-    cerr<<"Error: [Line "<<lexer.line<<"] Nested function is not allowed right now:"<<s<<endl;
+    cerr<<"Error: [Line "<<lexer.line<<"] Nested function/class is not allowed right now: "<<s<<endl;
     exit(NESTED_FUNCTION);
 }
 
@@ -76,7 +76,15 @@ inline void throwNotLvalue(){
  */
 vector<Operation> output;
 
+/**
+ * The current function that is parsing
+ */
 string currentFunction;
+/**
+ * The current class that is parsing
+ */
+string currentClass;
+
 /**
  * If globalVars[s]=X, then variable s is stored at GLOBAL_START+X
  */
@@ -109,6 +117,7 @@ vector<int> loopHeads;
  * This map points to the start program line that a function starts.
  */
 map<string,Function> functions;
+map<string,Type> types;
 
 /**
  * Return in functions do not know how many local variables are there in the function, therefore they do not know how much
@@ -117,6 +126,16 @@ map<string,Function> functions;
  * This holds the temporary return commands that need to set up localVarCountInFunc properly after function terminates.
  */
 vector<int> returnPostProcess;
+
+//============================================================Type related thingy
+
+int Type::getSize() {
+    if(size!=-1){
+        return size;
+    }
+
+    return size=CLASS_RESERVED+fields.size();
+}
 
 //============================================================Variable related thingy
 
@@ -226,13 +245,13 @@ void ValueExpression::compile(vector<Operation> &ops, int putAt) {
         }
 
         //just a normal variable
-        if (globalVars.count(token.value)) {
-            int loc = globalVars[token.value].offset;
-            ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
-        } else if (localVars.count(token.value)) {
+        if (localVars.count(token.value)) {
             int loc = localVars[token.value].offset;
             ops.emplace_back(gGetStack(TEMP, loc));
             ops.emplace_back(gSetStack(TEMP, putAt));
+        } else if (globalVars.count(token.value)) {
+            int loc = globalVars[token.value].offset;
+            ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
         } else {
             throwUndefined(token.value, "value expression");
         }
@@ -246,11 +265,12 @@ void ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
     if(token.type!=IDENTIFIER){
         throwNotLvalue();
     }
-    if(globalVars.count(token.value)){
-        ops.emplace_back(gSet(TEMP,GLOBAL_START+globalVars[token.value].offset));
-    }else if(localVars.count(token.value)){
+
+    if(localVars.count(token.value)){
         ops.emplace_back(gSet(TEMP,localVars[token.value].offset));
         ops.emplace_back(gMinus(STACK_START,TEMP,TEMP));
+    }else if(globalVars.count(token.value)){
+        ops.emplace_back(gSet(TEMP,GLOBAL_START+globalVars[token.value].offset));
     }
     ops.emplace_back(gSetStack(TEMP,putAt));
 }
@@ -495,18 +515,31 @@ bool compileStatement(){
         //First check its availability
         checkVariableAvailability(varName.value);
 
-        if(currentFunction==""){
-            //it's a global variable
-            if(globalVars.count(varName.value)){
-                throwDuplicate(varName.value,"global");
+        if(currentFunction.empty()){
+            if(currentClass.empty()) {
+                //it's a global variable
+                if (globalVars.count(varName.value)) {
+                    throwDuplicate(varName.value, "global");
+                }
+
+                Variable var = Variable();
+                var.offset = globalVarSize;
+                var.type = "int";
+                globalVarSize++;
+
+                globalVars[varName.value] = var;
+            }else{
+                //it's a class field
+                if(types[currentClass].fields.count(varName.value)){
+                    throwDuplicate(varName.value,"class "+currentClass);
+                }
+
+                Variable var = Variable();
+                var.offset = types[currentClass].fields.size();
+                var.type = "int";
+
+                types[currentClass].fields[varName.value]=var;
             }
-
-            Variable var=Variable();
-            var.offset=globalVarSize;
-            var.type="int";
-            globalVarSize++;
-
-            globalVars[varName.value]=var;
         }else{
             //it's a local variable
             if(localVars.count(varName.value)){
@@ -516,7 +549,7 @@ bool compileStatement(){
             Variable var=Variable();
             var.offset=currentTotalLocalVarSize+1;
             var.type="int";
-            currentTotalLocalVarSize++; //pre-generate its size
+            currentTotalLocalVarSize++;
             localVars[varName.value]=var;
             maximumTotalLocalVarSize=max(maximumTotalLocalVarSize,currentTotalLocalVarSize);
             if(!localVarStack.empty()) {
@@ -571,11 +604,17 @@ bool compileStatement(){
         //First check its availability
         checkVariableAvailability(funcName.value);
 
-        if(currentFunction!=""){ //check not nested function
+        if(!currentFunction.empty()){ //check not nested function
             throwNested(funcName.value);
         }
-        if(functions.count(funcName.value)){
-            throwDuplicate(funcName.value,"functions");
+        if(currentClass.empty()) {
+            if (functions.count(funcName.value)) {
+                throwDuplicate(funcName.value, "functions");
+            }
+        }else{
+            if(types[currentClass].functions.count(funcName.value)){
+                throwDuplicate(funcName.value,"functions in "+currentClass);
+            }
         }
 
         //Add parameters
@@ -623,9 +662,15 @@ bool compileStatement(){
         output.emplace_back(gJump(-1)); //to prevent the code being executed when just defined
         int toFinalChange=output.size()-1;
 
+        //prepare to add the function to list
         func.startLocation=output.size();
         func.returnType="int";
-        functions[currentFunction]=func;
+        if(currentClass.empty()) {
+            functions[currentFunction] = func; //adds to global scope
+        }else{
+            types[currentClass].functions[currentFunction]={func,-1}; //TODO assign function id
+        }
+
         output.emplace_back(gJump(-1)); //prepare to jump to initial code first
         int toChange=output.size()-1;
         int backTo=output.size();
@@ -663,7 +708,7 @@ bool compileStatement(){
 
         currentFunction=""; //restore state
     }else if(firstToken.value=="return") {
-        if (lexer.scryToken().value == ";") {
+        if (lexer.scryToken().value == ";") { //return; <==> return 0;
             output.emplace_back(gSet(TEMP, 0));
         } else {
             compileExpression();
@@ -683,13 +728,46 @@ bool compileStatement(){
 
         output.emplace_back(gJump(loopHeads.back()));
         ensureNext(";");
-    }else if(firstToken.value=="break"){
-        if(loopHeads.empty()){
+    }else if(firstToken.value=="break") {
+        if (loopHeads.empty()) {
             fail("Escaped break outside of a loop");
         }
         breakLines.back().push_back(output.size());
         output.emplace_back(gJump(-1));
         ensureNext(";");
+    }else if(firstToken.value=="class"){
+        //class :/
+        auto name=lexer.getToken();
+
+        //check availability
+        ensure(name,IDENTIFIER);
+        if(types.count(name.value)){
+            throwDuplicate(name.value,"class creation");
+        }
+        if(!currentClass.empty()){
+            throwNested(currentClass);
+        }
+
+        currentClass=name.value;
+        types[currentClass]=Type();
+        //TODO extends superclass
+
+        //initialize "this"
+        Variable var = Variable();
+        var.offset = 0;
+        var.type = currentClass;
+        types[currentClass].fields["this"]=var;
+
+        output.emplace_back(gJump(-1));
+        int toFinalChange=output.size()-1; //make sure it's not executed
+        compileStatement();
+        output[toFinalChange].x=output.size();
+        types[currentClass].getSize();
+
+        cout<<"New class: "<<currentClass<<" of size "<<types[currentClass].getSize()<<" defined. Use breakpoint to see detail."<<endl;
+
+        currentClass="";
+
     }else{
         //consider as expression
         lexer.suckToken(firstToken);

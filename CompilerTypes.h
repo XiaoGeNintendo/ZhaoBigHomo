@@ -7,6 +7,7 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+
 struct Function{
     int startLocation;
     /**
@@ -39,4 +40,24 @@ struct Variable{
     std::string type;
 };
 
+struct Type{
+    /**
+     * Manually calculated size. Use getSize() to get size. Do not directly access this.
+     */
+    int size=-1;
+    /**
+     * Name, (type,offset)
+     */
+    map<string,Variable> fields;
+    /**
+     * Name, (type,offset)
+     */
+    map<string,pair<Function,int>> functions;
+
+    /**
+     * Returns the size needed for allocation of this class
+     * @return
+     */
+    int getSize();
+};
 #endif //ZHAOBIGHOMO_COMPILERTYPES_H

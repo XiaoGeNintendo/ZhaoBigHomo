@@ -77,6 +77,7 @@ Token Lexer::getToken() {
 
 void Lexer::open(string file) {
     stream=ifstream(file);
+    this->file=file;
     line=1;
 }
 

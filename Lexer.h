@@ -121,6 +121,10 @@ public:
      */
     int line;
     /**
+     * Current file
+     */
+    string file;
+    /**
      * Open the given file for input
      * @param file
      */

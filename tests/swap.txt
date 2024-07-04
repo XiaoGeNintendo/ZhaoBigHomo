@@ -1,0 +1,14 @@
+//swaps the content at memory X and memory Y
+def swap(x, y){
+    var tmp=[x];
+    [x]=[y];
+    [y]=tmp;
+}
+
+def main(){
+    var x=1;
+    var y=2;
+    swap(&x,&y);
+    output x;
+    output y;
+}
