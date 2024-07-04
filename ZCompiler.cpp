@@ -752,12 +752,6 @@ bool compileStatement(){
         types[currentClass]=Type();
         //TODO extends superclass
 
-        //initialize "this"
-        Variable var = Variable();
-        var.offset = 0;
-        var.type = currentClass;
-        types[currentClass].fields["this"]=var;
-
         output.emplace_back(gJump(-1));
         int toFinalChange=output.size()-1; //make sure it's not executed
         compileStatement();
