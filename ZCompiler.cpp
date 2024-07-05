@@ -965,8 +965,6 @@ bool compileStatement(){
 
         //initialize local variables
         currentFunction=funcName.value;
-        localVars.clear();
-        returnPostProcess.clear();
         localVars["%RETURN_ADDRESS%"]=Variable(1);
         for(int i=1;i<=TEMP_VAR_COUNT;i++){
             localVars["%TEMP"+to_string(i)+"%"]=Variable(i+1);
@@ -1035,7 +1033,10 @@ bool compileStatement(){
             output[loc].x=maximumTotalLocalVarSize;
         }
 
-        currentFunction=""; //restore state
+        //restore state
+        currentFunction="";
+        localVars.clear();
+        returnPostProcess.clear();
     }else if(firstToken.value=="return") {
         if (lexer.scryToken().value == ";") { //return; <==> return 0;
             output.emplace_back(gSet(TEMP, 0));
