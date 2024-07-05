@@ -34,8 +34,6 @@ public:
 };
 
 class BinaryExpression:public Expression{
-private:
-    string compileDot(vector<Operation> &ops, int putAt, bool lvalue);
 public:
     Token op;
     Expression* left;
@@ -43,7 +41,6 @@ public:
 
     BinaryExpression(Token op, Expression* left, Expression* right):op(op),left(left),right(right){}
     string compile(vector<Operation> &ops, int putAt) override;
-    string compileAsLvalue(vector<Operation> &ops, int putAt) override;
     ~BinaryExpression() override;
 
 };
@@ -59,13 +56,23 @@ public:
 
 class FunctionExpression: public Expression{
 public:
-    string call;
+    Expression* call;
     vector<Expression*> parameters;
-    FunctionExpression(string call, vector<Expression*> parameters):call(call),parameters(parameters){}
+    FunctionExpression(Expression* call, vector<Expression*> parameters):call(call),parameters(parameters){}
     string compile(vector<Operation> &ops, int putAt) override;
     ~FunctionExpression() override;
 };
 
+class DotExpression: public Expression{
+public:
+    Expression* left;
+    Token right;
+
+    DotExpression(Expression* left, Token right):left(left),right(right){}
+
+    string compile(vector<Operation> &ops, int putAt) override;
+    string compileAsLvalue(vector<Operation> &ops, int putAt) override;
+};
 
 class UnaryExpression:public Expression{
 public:

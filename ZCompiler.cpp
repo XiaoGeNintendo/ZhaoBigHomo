@@ -22,6 +22,19 @@ using namespace std;
 Lexer lexer;
 ofstream outStream;
 
+//Copied from ChatGPT
+std::vector<std::string> split(const std::string& str, char delimiter) {
+    std::vector<std::string> tokens;
+    std::stringstream ss(str);
+    std::string token;
+
+    while (std::getline(ss, token, delimiter)) {
+        tokens.push_back(token);
+    }
+
+    return tokens;
+}
+
 inline void fail(const string& msg,int err=CUSTOM_FAIL){
     cerr<<"Error: [Line "<<lexer.line<<"] "<<msg<<endl;
     exit(err);
@@ -48,7 +61,7 @@ inline void ensureNext(const string& x){
 
 inline void ensureSameType(const string& found, const string& expect){
     if(found!=expect){
-        fail("Type mismatch: Expected "+expect+" but found "+found,TYPE_MISMATCH);
+        warn("Type mismatch: Expected "+expect+" but found "+found);
     }
 }
 
@@ -70,6 +83,10 @@ inline void throwKeyword(const string& s) {
 
 inline void throwNotLvalue(){
     fail("Invalid left-hand side in expression or non-memorable expression.",NOT_LVALUE);
+}
+
+inline void warnShadowed(const string& name, const string& beShadowedBy){
+    warn("Name "+name+" might be shadowed by "+beShadowedBy+" and may cause unexpected results.");
 }
 
 /**
@@ -142,6 +159,23 @@ int Type::getSize() {
     return size=CLASS_RESERVED+fields.size();
 }
 
+string getMethodSignature(const vector<pair<string,string>>& parameters, const string& retType){
+    string ans="function(";
+    for(auto pair:parameters){
+        if(pair.second=="int"){
+            ans+="I";
+        }else {
+            ans += "L" + pair.second + ";";
+        }
+    }
+    ans+=")"+(retType=="int"?"I":"L"+retType+";");
+    return ans;
+}
+
+string Function::getMethodSignature() const {
+    return ::getMethodSignature(parameters,returnType);
+}
+
 //============================================================Variable related thingy
 
 //nothing here :)
@@ -164,6 +198,7 @@ int Type::getSize() {
 
 string Expression::compileAsLvalue(vector<Operation> &ops, int putAt) {
     throwNotLvalue();
+    assert(false);
 }
 
 string TrinaryExpression::compile(vector<Operation> &ops, int putAt) {
@@ -194,46 +229,6 @@ string TrinaryExpression::compile(vector<Operation> &ops, int putAt) {
     return typeT;
 }
 
-string BinaryExpression::compileDot(vector<Operation> &ops, int putAt, bool lvalue) {
-    //we will use a switch back hack to process dot
-    //by switching "currentClass" and "THIS" to trick the system into we are inside a certain class
-
-    string leftType=left->compile(ops,putAt+1); //compute left address
-
-    //fast fail
-    if(leftType=="int"){
-        fail("int is not indexable",CUSTOM_FAIL);
-    }
-
-    string lastType=currentClass; //store the current class for switching back
-    bool lastSearch=forceInClassSearch;
-
-    currentClass=leftType; //hack current class
-    forceInClassSearch=true;
-    //hack "this"
-    ops.emplace_back(gGetStack(TEMP+1,putAt+1));
-    ops.emplace_back(gGetStack(TEMP,THIS_LOCATION));
-    ops.emplace_back(gSetStack(TEMP,putAt+1));
-    ops.emplace_back(gSetStack(TEMP+1,THIS_LOCATION));
-
-    string rightType;
-    if(lvalue){
-        rightType=right->compileAsLvalue(ops,putAt+2);
-    }else {
-        rightType = right->compile(ops, putAt + 2);
-    }
-
-    //switch back
-    ops.emplace_back(gGetStack(TEMP,putAt+1));
-    ops.emplace_back(gSetStack(TEMP,THIS_LOCATION));
-    currentClass=lastType;
-    forceInClassSearch=lastSearch;
-
-    //move the result
-    ops.emplace_back(gGetStack(TEMP,putAt+2));
-    ops.emplace_back(gSetStack(TEMP,putAt));
-    return rightType;
-}
 
 string BinaryExpression::compile(vector<Operation> &ops, int putAt) {
 
@@ -269,10 +264,6 @@ string BinaryExpression::compile(vector<Operation> &ops, int putAt) {
         //temp==1
         ops.emplace_back(gSetStack(1,putAt)); //sz+1
         return "int";
-    }
-
-    if(op.value=="."){
-        return compileDot(ops,putAt,false);
     }
 
     string leftType=left->compile(ops,putAt+1);
@@ -320,14 +311,6 @@ string BinaryExpression::compile(vector<Operation> &ops, int putAt) {
     return "int";
 }
 
-//nearly same as compileDot
-string BinaryExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
-    if(op.value!="."){
-        throwNotLvalue();
-    }
-
-    return compileDot(ops,putAt,true);
-}
 
 string AssignmentExpression::compile(vector<Operation> &ops, int putAt){
     string rightType=right->compile(ops,putAt+1);
@@ -375,36 +358,26 @@ string FetchAddressExpression::compile(vector<Operation> &ops, int putAt){
 }
 
 string FunctionExpression::compile(vector<Operation> &ops, int putAt){
-    string funcName=call; //history problem
+    string type_name=call->compile(ops,putAt+1);
 
-    Function func;
-    if(currentClass.empty()) {
-        //global function
-        if (!functions.count(funcName)) {
-            throwUndefined(funcName, "function calling");
-        }
-
-        //copy parameter
-        func = functions[funcName];
-    }else{
-        //it's in a class
-        if(!types[currentClass].functions.count(funcName)){
-            throwUndefined(funcName,"function calling in "+currentClass);
-        }
-
-        func=types[currentClass].functions[funcName].first;
+    if(type_name.substr(0,8)!="function"){
+        fail(type_name+" is not callable.");
     }
 
-    if(parameters.size()!=func.parameters.size()){
-        fail("Parameter count does not match.");
+    string retType=split(type_name,')')[1];
+    if(retType.back()==';'){
+        //a complex type
+        retType=retType.substr(1,retType.size()-2);
     }
 
     //calculate parameters
+    vector<pair<string,string>> pList;
     for(int i=0;i<parameters.size();i++){
-        string givenType=parameters[i]->compile(ops,putAt+1+i);
-        string requiredType=func.parameters[i].second;
-        ensureSameType(givenType,requiredType);
+        string givenType=parameters[i]->compile(ops,putAt+2+i);
+        pList.emplace_back("",givenType);
     }
+    string found_type=getMethodSignature(pList,retType);
+    ensureSameType(found_type,type_name);
 
     //copy "this"
     ops.emplace_back(gGetStack(TEMP+2,THIS_LOCATION));
@@ -412,19 +385,22 @@ string FunctionExpression::compile(vector<Operation> &ops, int putAt){
     //copy parameters
     int nowAt=3;
     for(int i=0;i<parameters.size();i++){
-        ops.emplace_back(gGetStack(TEMP+nowAt,putAt+1+i));
+        ops.emplace_back(gGetStack(TEMP+nowAt,putAt+2+i));
         nowAt++;
     }
 
+    //call it!!
     ops.emplace_back(gSet(TEMP,-1)); //set jump back position
     int toChange=ops.size()-1;
-    ops.emplace_back(gJump(func.startLocation));
+    ops.emplace_back(gGetStack(TEMP-1,putAt+1));
+    ops.emplace_back(gJumpMem(TEMP-1));
     ops[toChange].x=ops.size();
     ops.emplace_back(gSetStack(TEMP,putAt));
 
-    return func.returnType;
+    return retType;
 }
 
+//lookup order: local var -> field -> method -> global var -> global func
 string ValueExpression::compile(vector<Operation> &ops, int putAt) {
     if(token.type==INTEGER){
         ops.emplace_back(gSet(TEMP,stoi(token.value)));
@@ -444,24 +420,38 @@ string ValueExpression::compile(vector<Operation> &ops, int putAt) {
         }
 
         //just a normal variable
-        if (!forceInClassSearch && localVars.count(token.value)) {
+        if (localVars.count(token.value)) {
+            //local var
             int loc = localVars[token.value].offset;
             ops.emplace_back(gGetStack(TEMP, loc));
             ops.emplace_back(gSetStack(TEMP, putAt));
 
             return localVars[token.value].type;
-        }else if(!currentClass.empty() && types[currentClass].fields.count(token.value)){
+        }else if(!currentClass.empty() && types[currentClass].fields.count(token.value)) {
             //it's a field
-            ops.emplace_back(gGetStack(TEMP,THIS_LOCATION));
+            ops.emplace_back(gGetStack(TEMP, THIS_LOCATION));
             //MEM[TEMP] --> start of object
-            ops.emplace_back(gArrayGet(TEMP,types[currentClass].fields[token.value].offset,TEMP));
-            ops.emplace_back(gSetStack(TEMP,putAt));
+            ops.emplace_back(gArrayGet(TEMP, types[currentClass].fields[token.value].offset, TEMP));
+            ops.emplace_back(gSetStack(TEMP, putAt));
 
             return types[currentClass].fields[token.value].type;
-        } else if (!forceInClassSearch && globalVars.count(token.value)) {
+        }else if(!currentClass.empty() && types[currentClass].functions.count(token.value)){
+            //it's a method
+            ops.emplace_back(gSet(TEMP,types[currentClass].functions[token.value].first.startLocation));
+            ops.emplace_back(gSetStack(TEMP,putAt));
+
+            return types[currentClass].functions[token.value].first.getMethodSignature();
+        } else if (globalVars.count(token.value)) {
+            //global field
             int loc = globalVars[token.value].offset;
             ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
             return globalVars[token.value].type;
+        } else if (functions.count(token.value)){
+            //global function
+            ops.emplace_back(gSet(TEMP,functions[token.value].startLocation));
+            ops.emplace_back(gSetStack(TEMP,putAt));
+
+            return functions[token.value].getMethodSignature();
         } else {
             throwUndefined(token.value, "value expression");
         }
@@ -469,6 +459,8 @@ string ValueExpression::compile(vector<Operation> &ops, int putAt) {
     }else{
         fail("Expected INTEGER or IDENTIFIER in value expression",EXPECTED_BUT_FOUND);
     }
+
+    assert(false);
 }
 
 string ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
@@ -482,22 +474,86 @@ string ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
         ops.emplace_back(gMinus(STACK_START, TEMP, TEMP));
 
         type=localVars[token.value].type;
-    }else if(!currentClass.empty() && types[currentClass].fields.count(token.value)){
-        ops.emplace_back(gGetStack(TEMP,THIS_LOCATION));
-        ops.emplace_back(gSet(TEMP+1,types[currentClass].fields[token.value].offset));
-        ops.emplace_back(gAdd(TEMP,TEMP+1,TEMP));
-        ops.emplace_back(gSetStack(TEMP,putAt));
+    }else if(!currentClass.empty() && types[currentClass].fields.count(token.value)) {
+        ops.emplace_back(gGetStack(TEMP, THIS_LOCATION));
+        ops.emplace_back(gSet(TEMP + 1, types[currentClass].fields[token.value].offset));
+        ops.emplace_back(gAdd(TEMP, TEMP + 1, TEMP));
+        ops.emplace_back(gSetStack(TEMP, putAt));
 
-        type=types[currentClass].fields[token.value].type;
-    }else if(globalVars.count(token.value)){
-        ops.emplace_back(gSet(TEMP,GLOBAL_START+globalVars[token.value].offset));
+        type = types[currentClass].fields[token.value].type;
+    }else if(!currentClass.empty() && types[currentClass].functions.count(token.value)){
+        fail("Class method "+token.value+" is not modifiable.",NOT_LVALUE);
+    }else if(!forceInClassSearch && globalVars.count(token.value)) {
+        ops.emplace_back(gSet(TEMP, GLOBAL_START + globalVars[token.value].offset));
 
-        type=globalVars[token.value].type;
+        type = globalVars[token.value].type;
+    }else if(functions.count(token.value)){
+        fail("Global function "+token.value+" is not modifiable.",NOT_LVALUE);
     }else{
         throwUndefined(token.value,"value expression (lvalue)");
     }
     ops.emplace_back(gSetStack(TEMP,putAt));
     return type;
+}
+
+string DotExpression::compile(vector<Operation> &ops, int putAt) {
+    string leftType=left->compile(ops,putAt+1);
+
+    //fast fail
+    if(leftType=="int"){
+        fail("int is not indexable.");
+    }
+    if(!types.count(leftType)){
+        throwUndefined(leftType,"types");
+    }
+
+    if(types[leftType].fields.count(right.value)){
+        //it's a field
+        ops.emplace_back(gGetStack(TEMP,putAt+1));
+        ops.emplace_back(gArrayGet(TEMP,types[leftType].fields[right.value].offset,TEMP));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+        return types[leftType].fields[right.value].type;
+    }else if(types[leftType].functions.count(right.value)){
+        //it's a function
+        auto f=types[leftType].functions[right.value].first;
+        ops.emplace_back(gSet(TEMP,f.startLocation));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+        return f.getMethodSignature();
+    }else{
+        //404 not found
+        throwUndefined(right.value,"type "+leftType);
+    }
+
+    assert(false);
+}
+
+string DotExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
+    string leftType=left->compile(ops,putAt+1);
+
+    //fast fail
+    if(leftType=="int"){
+        fail("int is not indexable.");
+    }
+    if(!types.count(leftType)){
+        throwUndefined(leftType,"types");
+    }
+
+    if(types[leftType].fields.count(right.value)){
+        //it's a field
+        ops.emplace_back(gGetStack(TEMP,putAt+1));
+        ops.emplace_back(gSet(TEMP+1,types[leftType].fields[right.value].offset));
+        ops.emplace_back(gAdd(TEMP,TEMP+1,TEMP));
+        ops.emplace_back(gSetStack(TEMP,putAt));
+        return types[leftType].fields[right.value].type;
+    }else if(types[leftType].functions.count(right.value)){
+        //it's a function
+        throwNotLvalue();
+    }else{
+        //404 not found
+        throwUndefined(right.value,"type "+leftType);
+    }
+
+    assert(false);
 }
 
 string UnaryExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
@@ -580,23 +636,11 @@ void initExpressionParsingModule(){
         }
     };
 
-    ExpressionLayerLogic layerDot=ExpressionLayerLogic();
-    layerDot.operators={"."};
-
-    ExpressionLayerLogic layerStuff=ExpressionLayerLogic();
-    layerStuff.isSpecialLayer=true;
-    layerStuff.specialOp=[](int layer)->Expression* {
-        auto token = lexer.getToken();
-        if (token.value == "(") {
-            auto res = compileExpression(0);
-            ensureNext(")");
-            return res;
-        } else if (token.value == "[") {
-            //this is a get memory operation. Wow! Different from C/C++ syntax! Cool!!!
-            auto exp = compileExpression(0);
-            ensureNext("]");
-            return new UnaryExpression(token, exp);
-        } else {
+    ExpressionLayerLogic layerDots=ExpressionLayerLogic();
+    layerDots.isSpecialLayer=true;
+    layerDots.specialOp=[](int layer)->Expression*{
+        auto startExp= compileExpression(layer+1);
+        while(true){
             if(lexer.scryToken().value=="("){
                 //oh! function calling
                 lexer.getToken(); //(
@@ -612,15 +656,39 @@ void initExpressionParsingModule(){
                     }
                 }
 
-                return new FunctionExpression(token.value,parameters);
+                startExp=new FunctionExpression(startExp,parameters);
+            }else if(lexer.scryToken().value=="."){
+                //wow dots
+                lexer.getToken(); //skip the "."
+                auto anotherToken=lexer.getToken();
+                startExp=new DotExpression(startExp, anotherToken);
             }else{
-                //regular token
-                return new ValueExpression(token);
+                break;
             }
         }
 
+        return startExp;
     };
-    logics={layerEqual,layerTrinary,layerLogicalOr,layerLogicalAnd,layerLogical,layerPlusMinus,layerMultipleDivide,layerUnary,layerAddressFunction,layerDot,layerStuff};
+
+    ExpressionLayerLogic layerStuff=ExpressionLayerLogic();
+    layerStuff.isSpecialLayer=true;
+    layerStuff.specialOp=[](int layer)->Expression* {
+        auto token = lexer.getToken();
+        if (token.value == "(") {
+            auto res = compileExpression(0);
+            ensureNext(")");
+            return res;
+        } else if (token.value == "[") {
+            //this is a get memory operation. Wow! Different from C/C++ syntax! Cool!!!
+            auto exp = compileExpression(0);
+            ensureNext("]");
+            return new UnaryExpression(token, exp);
+        } else {
+            return new ValueExpression(token);
+        }
+    };
+
+    logics={layerEqual,layerTrinary,layerLogicalOr,layerLogicalAnd,layerLogical,layerPlusMinus,layerMultipleDivide,layerUnary,layerAddressFunction,layerDots,layerStuff};
 }
 
 Expression* compileExpression(int layer){
@@ -808,7 +876,10 @@ bool compileStatement(){
         //give it a default value
         if(lexer.scryToken().value=="="){
             lexer.getToken();
-            compileExpression();
+            string rightType=compileExpression();
+
+            ensureSameType(rightType,var.type);
+
             if(currentFunction==""){
                 //global variable
                 output.emplace_back(gCopy(TEMP,GLOBAL_START+globalVars[varName.value].offset));
@@ -872,6 +943,7 @@ bool compileStatement(){
             ensure(name,IDENTIFIER);
             string type="int";
             if(lexer.scryToken().value==":"){
+                lexer.getToken();
                 auto typeToken=lexer.getToken();
                 ensure(typeToken,IDENTIFIER);
                 type=typeToken.value;

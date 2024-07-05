@@ -20,6 +20,11 @@ struct Function{
     vector<pair<string,string>> parameters;
     string returnType;
 
+    /**
+     * Return the type signature of this method in a human readable way
+     * @return
+     */
+    string getMethodSignature() const;
 };
 
 struct Variable{
