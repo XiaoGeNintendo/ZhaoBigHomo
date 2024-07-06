@@ -368,6 +368,8 @@ string FunctionExpression::compile(vector<Operation> &ops, int putAt){
     if(retType.back()==';'){
         //a complex type
         retType=retType.substr(1,retType.size()-2);
+    }else{
+        retType="int";
     }
 
     //calculate parameters
@@ -814,10 +816,13 @@ bool compileStatement(){
         loopHeads.pop_back();
     }else if(firstToken.value=="var"){
         Variable var=Variable();
-        var.type="int";
+        var.type="???";
 
         auto varName=lexer.getToken();
         ensure(varName,IDENTIFIER);
+
+        //Check its availability
+        checkVariableAvailability(varName.value);
 
         //give it a type
         if(lexer.scryToken().value==":"){
@@ -827,9 +832,6 @@ bool compileStatement(){
 
             var.type=typeName.value;
         }
-
-        //Check its availability
-        checkVariableAvailability(varName.value);
 
         if(currentFunction.empty()){
             if(currentClass.empty()) {
@@ -868,9 +870,9 @@ bool compileStatement(){
             }
 
             cout<<"Variable definition: "<<varName.value<<" in "<<currentFunction
-            <<" assigned to "<<localVars[varName.value].offset
-            <<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize
-            <<" Type:"<<localVars[varName.value].type<<endl;
+                <<" assigned to "<<localVars[varName.value].offset
+                <<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize
+                <<" Type:"<<localVars[varName.value].type<<endl;
         }
 
         //give it a default value
@@ -878,16 +880,41 @@ bool compileStatement(){
             lexer.getToken();
             string rightType=compileExpression();
 
-            ensureSameType(rightType,var.type);
-
-            if(currentFunction==""){
-                //global variable
-                output.emplace_back(gCopy(TEMP,GLOBAL_START+globalVars[varName.value].offset));
+            if(var.type!="???") {
+                ensureSameType(rightType, var.type);
             }else{
-                //local variable
+                var.type=rightType;
+            }
+
+            if(currentClass.empty() && currentFunction.empty()){
+                //global
+                output.emplace_back(gCopy(TEMP,GLOBAL_START+globalVars[varName.value].offset));
+            }else if(!currentClass.empty() && currentFunction.empty()){
+                //field
+                output.emplace_back(gGetStack(TEMP+1,THIS_LOCATION));
+                output.emplace_back(gSet(TEMP+2,types[currentClass].fields[varName.value].offset));
+            }else{
+                //local
                 output.emplace_back(gSetStack(TEMP,localVars[varName.value].offset));
             }
+        }else{
+            var.type="int";
         }
+
+        //update type yet again
+        if(currentFunction.empty()){
+            if(currentClass.empty()) {
+                //global
+                globalVars[varName.value].type = var.type;
+            }else{
+                //it's a class field
+                types[currentClass].fields[varName.value].type=var.type;
+            }
+        }else{
+            //it's a local variable
+            localVars[varName.value].type=var.type;
+        }
+
         ensureNext(";");
     }else if(firstToken.value=="{"){
         //firstly, create a new layer
@@ -1038,10 +1065,26 @@ bool compileStatement(){
         localVars.clear();
         returnPostProcess.clear();
     }else if(firstToken.value=="return") {
+
+        if(currentFunction.empty()){
+            fail("Escaped return statement out of function");
+        }
+
         if (lexer.scryToken().value == ";") { //return; <==> return 0;
             output.emplace_back(gSet(TEMP, 0));
         } else {
-            compileExpression();
+            string foundType=compileExpression();
+
+            //type check
+            if(currentClass.empty()) {
+                if (functions.count(currentFunction)) {
+                    ensureSameType(foundType,functions[currentFunction].returnType);
+                }
+            }else{
+                if(types[currentClass].functions.count(currentFunction)){
+                    ensureSameType(foundType,types[currentClass].functions[currentFunction].first.returnType);
+                }
+            }
         }
         //same code as above. Change both occurrence!!
         output.emplace_back(gGetStack(TEMP + 2, 1));
