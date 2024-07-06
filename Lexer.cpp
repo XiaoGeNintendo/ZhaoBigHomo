@@ -72,6 +72,7 @@ Token Lexer::getToken() {
         }
         return getToken();
     }
+
     return t;
 }
 
@@ -95,4 +96,5 @@ void Lexer::tillNextLine() {
     string s;
     getline(stream,s);
     fw=-2;
+    line++;
 }
