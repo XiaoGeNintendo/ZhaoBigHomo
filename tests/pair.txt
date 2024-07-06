@@ -1,0 +1,32 @@
+class Pair{
+    var first; //default: int
+    var second;
+}
+
+var freeLocation=114514;
+//a simple allocator
+def newPair(x,y):Pair{
+    var z:Pair=freeLocation; //will issue a warning but let's ignore it
+    freeLocation+=2;
+    z.first=x;
+    z.second=y;
+    return z;
+}
+
+def main(){
+    var a;
+    var b;
+    var c;
+    var d;
+    input a;
+    input b;
+    input c;
+    input d;
+    var p1:Pair=newPair(a,b);
+    var p2=newPair(c,d); //auto detect type "Pair"
+    output p1;
+    output p2;
+    output newPair; //output function pointer to newPair
+    output p1.first+p1.second;
+    output p2.first+p2.second;
+}
