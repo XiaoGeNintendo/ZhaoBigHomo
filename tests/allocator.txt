@@ -1,0 +1,73 @@
+var START=114000;
+var END=114099;
+var pointer=START;
+//only use memory in [START,END]
+
+//attempt to allocate "size" memory and returns the allocated address or -1 if not found
+def new(size){
+    var cnt=0;
+    while(true){
+        if([pointer]==0){
+            //oh? maybe available here
+            var temp=pointer;
+            while(temp<=END && [temp]==0){
+                temp+=1;
+            }
+            if(temp-pointer>=size+1){
+                [pointer]=size;
+                return pointer+1;
+            }else if(temp>END){
+                 pointer=START;
+                 cnt+=1;
+                 if(cnt==2){
+                     return -1;
+                 }
+            }else{
+                pointer=temp;
+            }
+        }else{
+            pointer+=[pointer]+1;
+            if(pointer>END){
+                pointer=START;
+                cnt+=1;
+                if(cnt==2){
+                    return -1; //404 not found
+                }
+            }
+        }
+    }
+}
+
+def delete(obj){
+    obj-=1;
+    var cnt=[obj]+1;
+    while(cnt){
+        [obj]=0;
+        obj+=1;
+        cnt-=1;
+    }
+}
+
+def print(){
+    var now=START;
+    while(now<=END){
+        output [now];
+        now+=1;
+    }
+}
+
+def main(){
+    print();
+    output new(3);
+    print();
+    output new(9);
+    print();
+    output new(2);
+    print();
+    output new(82);
+    print();
+    delete(114001);
+    print();
+    output new(2);
+    output new(2);
+}
