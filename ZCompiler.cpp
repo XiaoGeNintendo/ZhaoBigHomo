@@ -160,7 +160,7 @@ int Type::getSize() {
 }
 
 string getMethodSignature(const vector<pair<string,string>>& parameters, const string& retType){
-    string ans="function(";
+    string ans="Function(";
     for(auto pair:parameters){
         if(pair.second=="int"){
             ans+="I";
@@ -360,11 +360,19 @@ string FetchAddressExpression::compile(vector<Operation> &ops, int putAt){
 string FunctionExpression::compile(vector<Operation> &ops, int putAt){
     string type_name=call->compile(ops,putAt+1);
 
-    if(type_name.substr(0,8)!="function"){
+    if(type_name.substr(0,8)!="Function"){
         fail(type_name+" is not callable.");
     }
 
-    string retType=split(type_name,')')[1];
+    auto splitResult=split(type_name,')');
+    string retType;
+    if(splitResult.size()>=2){
+        retType=splitResult[1];
+    }else{
+        retType="?";
+        type_name="Function(?)?";
+    }
+
     if(retType.back()==';'){
         //a complex type
         retType=retType.substr(1,retType.size()-2);
