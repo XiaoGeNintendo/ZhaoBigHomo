@@ -34,8 +34,10 @@ string UnaryExpression::compile(vector<Operation> &ops, int putAt) {
         ops.emplace_back(gMinus(0,TEMP,TEMP));
     }else if(op.value=="["){
         ops.emplace_back(gArrayGet(TEMP,0,TEMP));
-    }else if(op.value=="+"){
+    }else if(op.value=="+") {
         //do nothing
+    }else if(op.value=="!"){
+        ops.emplace_back(gNot(TEMP,TEMP));
     }else{
         assert(false);
     }

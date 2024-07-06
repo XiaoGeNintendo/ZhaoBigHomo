@@ -615,6 +615,17 @@ void initExpressionParsingModule(){
     layerLogicalOr.operators={"||"};
     ExpressionLayerLogic layerLogicalAnd=ExpressionLayerLogic();
     layerLogicalAnd.operators={"&&"};
+    ExpressionLayerLogic layerLogicalNot=ExpressionLayerLogic();
+    layerLogicalNot.isSpecialLayer=true;
+    layerLogicalNot.specialOp=[](int layer)->Expression*{
+        if(lexer.scryToken().value=="!"){
+            auto op=lexer.getToken();
+            return new UnaryExpression(op, compileExpression(layer+1));
+        }else{
+            return compileExpression(layer+1);
+        }
+    };
+
     ExpressionLayerLogic layerLogical=ExpressionLayerLogic();
     layerLogical.operators={">","<",">=","<=","!=","=="};
     ExpressionLayerLogic layerPlusMinus=ExpressionLayerLogic();
@@ -698,7 +709,7 @@ void initExpressionParsingModule(){
         }
     };
 
-    logics={layerEqual,layerTrinary,layerLogicalOr,layerLogicalAnd,layerLogical,layerPlusMinus,layerMultipleDivide,layerUnary,layerAddressFunction,layerDots,layerStuff};
+    logics={layerEqual,layerTrinary,layerLogicalOr,layerLogicalAnd,layerLogicalNot, layerLogical,layerPlusMinus,layerMultipleDivide,layerUnary,layerAddressFunction,layerDots,layerStuff};
 }
 
 Expression* compileExpression(int layer){
