@@ -57,11 +57,13 @@ int main(int argc, char** argv){
 
     //time to execute
     int pt=0;
+    int codeCount=0;
     while(true){
         if(pt>=ops.size()){
             break;
         }
 
+        codeCount++;
         int opcode=ops[pt].opcode;
         int x=ops[pt].x;
         int y=ops[pt].y;
@@ -141,5 +143,6 @@ int main(int argc, char** argv){
         }
     }
 
+    cout<<"Total instructions run: "<<codeCount<<endl;
     return 0;
 }

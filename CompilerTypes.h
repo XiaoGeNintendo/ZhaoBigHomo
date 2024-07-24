@@ -50,6 +50,11 @@ struct Type{
      * Manually calculated size. Use getSize() to get size. Do not directly access this.
      */
     int size=-1;
+
+    /**
+     * The name of its superclass. If empty then none
+     */
+    string super;
     /**
      * Name, (type,offset)
      */

@@ -156,7 +156,7 @@ int Type::getSize() {
         return size;
     }
 
-    return size=CLASS_RESERVED+fields.size();
+    return size=fields.size();
 }
 
 string getMethodSignature(const vector<pair<string,string>>& parameters, const string& retType){
@@ -508,7 +508,6 @@ string ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
 
 string DotExpression::compile(vector<Operation> &ops, int putAt) {
     string leftType=left->compile(ops,putAt+1);
-
     //fast fail
     if(leftType=="int"){
         fail("int is not indexable.");
@@ -524,7 +523,7 @@ string DotExpression::compile(vector<Operation> &ops, int putAt) {
         ops.emplace_back(gSetStack(TEMP,putAt));
         return types[leftType].fields[right.value].type;
     }else if(types[leftType].functions.count(right.value)){
-        //it's a function
+        //it's a function. Make sure its "this" is set correctly
         auto f=types[leftType].functions[right.value].first;
         ops.emplace_back(gSet(TEMP,f.startLocation));
         ops.emplace_back(gSetStack(TEMP,putAt));
@@ -1142,8 +1141,33 @@ bool compileStatement(){
 
         currentClass=name.value;
         types[currentClass]=Type();
-        //TODO extends superclass
 
+        //extends superclass
+        if(lexer.scryToken().value==":"){
+            lexer.getToken();
+            auto supername=lexer.getToken();
+            ensure(supername,IDENTIFIER);
+            types[currentClass].super=supername.value;
+        }else{
+            types[currentClass].super="Object";
+        }
+        //check super class availability
+        if(types[currentClass].super=="int"){
+            fail("Primitive types (namely, 'int') is not allowed as super class.");
+        }
+        if(!types.count(types[currentClass].super)){
+            throwUndefined(types[currentClass].super,"types (as superclass of "+currentClass+")");
+        }
+        //copy super class contents
+        auto super=types[types[currentClass].super];
+        for(auto var:super.fields){
+            types[currentClass].fields[var.first]=var.second;
+        }
+        for(auto func:super.functions){
+            types[currentClass].functions[func.first]=func.second;
+        }
+
+        //real logic
         output.emplace_back(gJump(-1));
         int toFinalChange=output.size()-1; //make sure it's not executed
         compileStatement();
@@ -1174,6 +1198,9 @@ int main(int argc, char** argv){
 
     types["int"]=Type();
     types["null"]=Type();
+    auto object_type=Type();
+    object_type.fields["class"]= Variable(0,"Class");
+    types["Object"]=object_type;
 
     lexer.open(argv[1]);
     outStream=ofstream(argv[2]);

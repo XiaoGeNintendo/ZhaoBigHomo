@@ -30,7 +30,6 @@ const int TEMP_VAR_COUNT=50;
  * The location in stack to hold the "this" variable
  */
 const int THIS_LOCATION=TEMP_VAR_COUNT+2;
-const int CLASS_RESERVED=10;
 
 /**
  * Opcode=0 Set the given memory address to the direct value x
