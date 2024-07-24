@@ -741,9 +741,14 @@ Expression* compileExpression(int layer){
     return now;
 }
 
-string compileExpression(){
+/**
+ * Compile the next expression in the lexer stream
+ * @param lvalue - whether to compile it as lvalue
+ * @return
+ */
+string compileExpression(bool lvalue=false){
     auto exp= compileExpression(0);
-    string resultType=exp->compile(output,2);
+    string resultType = lvalue ? exp->compileAsLvalue(output,2) : exp->compile(output,2);
     output.emplace_back(gGetStack(TEMP,2));
     delete exp;
     return resultType;
@@ -771,24 +776,14 @@ bool compileStatement(){
         //empty statement
         return true;
     }else if(firstToken.value=="input"){
-        auto secondToken=lexer.getToken();
-        ensure(secondToken,IDENTIFIER);
-        if(localVars.count(secondToken.value)){
-            //it's a local variable
-            int relativePosition=localVars[secondToken.value].offset;
-            output.emplace_back(gInput());
-            output.emplace_back(gSetStack(INPUT_TEMP,relativePosition));
-        }else if(globalVars.count(secondToken.value)){
-            //it's a global variable
-            int position=globalVars[secondToken.value].offset;
-            output.emplace_back(gInput());
-            output.emplace_back(gCopy(INPUT_TEMP,GLOBAL_START+position));
-        }else{
-            throwUndefined(secondToken.value,"input");
-        }
+        auto type= compileExpression(true);
+        ensureSameType(type,"int");
+        output.emplace_back(gInput());
+        output.emplace_back(gArraySet(INPUT_TEMP,0,TEMP));
         ensureNext(";");
     }else if(firstToken.value=="output"){
-        compileExpression();
+        auto type=compileExpression();
+        ensureSameType(type,"int");
         output.emplace_back(gCopy(TEMP,OUTPUT_TEMP));
         output.emplace_back(gOutput());
         ensureNext(";");
