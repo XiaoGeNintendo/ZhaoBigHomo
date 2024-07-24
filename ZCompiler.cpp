@@ -160,6 +160,9 @@ inline void ensureSameType(const string& found, const string& expect){
         if(type==expect){
             return;
         }
+        if(!types.count(type)){
+            break;
+        }
         type=types[type].super;
     }
 
@@ -1042,9 +1045,7 @@ bool compileStatement(){
             localVars["%TEMP"+to_string(i)+"%"]=Variable(i+1);
         }
 
-        Variable This=Variable();
-        This.offset=THIS_LOCATION;
-        This.type=(currentClass.empty()?"NullType":currentClass);
+        Variable This=Variable(THIS_LOCATION,currentClass.empty()?"NullType":currentClass);
         localVars["this"]=This;
         maximumTotalLocalVarSize=currentTotalLocalVarSize=localVars.size();
 
@@ -1072,7 +1073,7 @@ bool compileStatement(){
                 auto expectedSignature=types[currentClass].functions[currentFunction].first.getMethodSignature();
                 auto newSignature=func.getMethodSignature();
                 if(expectedSignature!=newSignature){
-                    fail("Invalid Override: Expected "+expectedSignature+" but found "+newSignature);
+                    fail("Invalid Override: Expected "+expectedSignature+" but found "+newSignature+" for "+currentFunction+". Hint: Functions that share the same name cannot have different parameters as for now.");
                 }
 
                 types[currentClass].functions[currentFunction].first=func; //do not change its ID
