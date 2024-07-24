@@ -104,14 +104,15 @@ string currentFunction;
 string currentClass;
 
 /**
- * Hack for dots. Force a variable/function to search only in class
- */
-bool forceInClassSearch;
-/**
  * If globalVars[s]=X, then variable s is stored at GLOBAL_START+X
  */
 map<string,Variable> globalVars;
 int globalVarSize;
+
+/**
+ * The first empty space for vtable
+ */
+int vtableHead=VTABLE_START;
 
 /**
  * The local vars location in the current function. If localVars[s]=X, then the address MEM[STACK_START]-X holds the wanted variable
@@ -506,7 +507,7 @@ string ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
         type = types[currentClass].fields[token.value].type;
     }else if(!currentClass.empty() && types[currentClass].functions.count(token.value)){
         fail("Class method "+token.value+" is not modifiable.",NOT_LVALUE);
-    }else if(!forceInClassSearch && globalVars.count(token.value)) {
+    }else if(globalVars.count(token.value)) {
         ops.emplace_back(gSet(TEMP, GLOBAL_START + globalVars[token.value].offset));
 
         type = globalVars[token.value].type;
@@ -538,7 +539,11 @@ string DotExpression::compile(vector<Operation> &ops, int putAt) {
     }else if(types[leftType].functions.count(right.value)){
         //it's a function. Make sure its "this" is set correctly
         auto f=types[leftType].functions[right.value].first;
-        ops.emplace_back(gSet(TEMP,f.startLocation));
+        //but first use vtable lookup
+        int id=types[leftType].functions[right.value].second;
+        ops.emplace_back(gGetStack(TEMP,putAt+1)); //mem[temp]=obj's add
+        ops.emplace_back(gArrayGet(TEMP,0,TEMP)); //mem[temp]=mem[mem[temp]]=start of vtable
+        ops.emplace_back(gArrayGet(TEMP,id,TEMP)); //From Object we know MEM[x] is always x's class which is the start of the vtable location.
         ops.emplace_back(gSetStack(TEMP,putAt));
         return f.getMethodSignature();
     }else{
@@ -977,13 +982,11 @@ bool compileStatement(){
         if(!currentFunction.empty()){ //check not nested function
             throwNested(funcName.value);
         }
+
+        //check not duplicate
         if(currentClass.empty()) {
             if (functions.count(funcName.value)) {
                 throwDuplicate(funcName.value, "functions");
-            }
-        }else{
-            if(types[currentClass].functions.count(funcName.value)){
-                throwDuplicate(funcName.value,"functions in "+currentClass);
             }
         }
 
@@ -1047,9 +1050,21 @@ bool compileStatement(){
         //prepare to add the function to list
         func.startLocation=output.size();
         if(currentClass.empty()) {
-            functions[currentFunction] = func; //adds to global scope
+            //adds to global scope
+            functions[currentFunction] = func;
         }else{
-            types[currentClass].functions[currentFunction]={func,-1}; //TODO assign function id
+            if(types[currentClass].functions.count(currentFunction)){
+                //already have such function. Maybe this is overriding
+                auto expectedSignature=types[currentClass].functions[currentFunction].first.getMethodSignature();
+                auto newSignature=func.getMethodSignature();
+                if(expectedSignature!=newSignature){
+                    fail("Invalid Override: Expected "+expectedSignature+" but found "+newSignature);
+                }
+
+                types[currentClass].functions[currentFunction].first=func; //do not change its ID
+            }else{
+                types[currentClass].functions[currentFunction]={func,types[currentClass].functions.size()};
+            }
         }
 
         output.emplace_back(gJump(-1)); //prepare to jump to initial code first
@@ -1184,7 +1199,16 @@ bool compileStatement(){
         output[toFinalChange].x=output.size();
         types[currentClass].getSize();
 
-        cout<<"New class: "<<currentClass<<" of size "<<types[currentClass].getSize()<<" defined. Use breakpoint to see detail."<<endl;
+        //generate vtable
+        globalVars[currentClass] = Variable(globalVarSize,currentClass);
+        globalVarSize++;
+        output.emplace_back(gSet(GLOBAL_START+globalVarSize-1,vtableHead));
+        types[currentClass].vtableHead=vtableHead;
+        for(auto func:types[currentClass].functions){
+            output.emplace_back(gSet(vtableHead+func.second.second,func.second.first.startLocation));
+        }
+        vtableHead+=types[currentClass].functions.size();
+        cout<<"New class: "<<currentClass<<" of size "<<types[currentClass].getSize()<<" defined at "<<types[currentClass].vtableHead<<". Use breakpoint to see detail."<<endl;
 
         currentClass="";
 

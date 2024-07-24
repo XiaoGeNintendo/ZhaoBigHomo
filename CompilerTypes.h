@@ -52,6 +52,10 @@ struct Type{
     int size=-1;
 
     /**
+     * Start location of vtable head
+     */
+    int vtableHead;
+    /**
      * The name of its superclass. If empty then none
      */
     string super;
@@ -69,5 +73,6 @@ struct Type{
      * @return
      */
     int getSize();
+
 };
 #endif //ZHAOBIGHOMO_COMPILERTYPES_H

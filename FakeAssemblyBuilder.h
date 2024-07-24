@@ -16,7 +16,13 @@ inline std::vector<T> operator+(const std::vector<T>& vec1, const std::vector<T>
     return result;
 }
 
-
+/**
+ * The start of vtable zone
+ */
+const int VTABLE_START=1000;
+/**
+ * GLOBAL_START represents the start of global variable zone
+ */
 const int GLOBAL_START=5000;
 /**
  * MEM[STACK_START] points to the first empty space in stack space
@@ -24,7 +30,17 @@ const int GLOBAL_START=5000;
 const int STACK_START=10000;
 const int INPUT_TEMP=4999;
 const int OUTPUT_TEMP=4998;
+/**
+ * [TEMP-10,TEMP+10] is all reserved for registers.
+ *
+ * So many registers :O
+ */
 const int TEMP=100;
+/**
+ * The number of extra stack spaces per layer reserved for storing intermediate values in expressions.
+ *
+ * Longer expression will bomb.
+ */
 const int TEMP_VAR_COUNT=50;
 /**
  * The location in stack to hold the "this" variable
