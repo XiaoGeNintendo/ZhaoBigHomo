@@ -59,12 +59,6 @@ inline void ensureNext(const string& x){
     ensure(lexer.getToken(),x);
 }
 
-inline void ensureSameType(const string& found, const string& expect){
-    if(found!=expect){
-        warn("Type mismatch: Expected "+expect+" but found "+found);
-    }
-}
-
 inline void throwUndefined(const string& s,const string& process="unknown"){
     fail("Undefined symbol: "+s+" in process "+process,UNDEFINED_SYMBOL);
 }
@@ -151,6 +145,26 @@ map<string,Type> types;
 vector<int> returnPostProcess;
 
 //============================================================Type related thingy
+
+/**
+ * Ensure expect is of any super class of found
+ * @param found
+ * @param expect
+ */
+inline void ensureSameType(const string& found, const string& expect){
+    if(found==expect){
+        return;
+    }
+    string type=found;
+    while(!type.empty()){
+        if(type==expect){
+            return;
+        }
+        type=types[type].super;
+    }
+
+    warn("Type mismatch: Expected "+expect+" but found "+found);
+}
 
 int Type::getSize() {
     if(size!=-1){
@@ -1234,7 +1248,7 @@ int main(int argc, char** argv){
     types["NullType"]=Type();
     types["Function"]=Type();
     auto object_type=Type();
-    object_type.fields["class"]= Variable(0,"Class");
+    object_type.fields["class"]= Variable(0,"Object");
     types["Object"]=object_type;
 
     lexer.open(argv[1]);
