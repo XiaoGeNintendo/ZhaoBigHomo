@@ -468,7 +468,9 @@ string ValueExpression::compile(vector<Operation> &ops, int putAt) {
             ops.emplace_back(gSetStack(loc + GLOBAL_START, putAt));
             return globalVars[token.value].type;
         } else if (functions.count(token.value)){
-            //global function
+            //global function. Also set THIS see FunctionExpression
+            ops.emplace_back(gGetStack(TEMP,THIS_LOCATION));
+            ops.emplace_back(gSetStack(TEMP,putAt+1));
             ops.emplace_back(gSet(TEMP,functions[token.value].startLocation));
             ops.emplace_back(gSetStack(TEMP,putAt));
 
@@ -922,7 +924,9 @@ bool compileStatement(){
                 output.emplace_back(gSetStack(TEMP,localVars[varName.value].offset));
             }
         }else{
-            var.type="int";
+            if(var.type=="???") {
+                var.type = "int";
+            }
         }
 
         //update type yet again
@@ -1023,7 +1027,7 @@ bool compileStatement(){
 
         Variable This=Variable();
         This.offset=THIS_LOCATION;
-        This.type=(currentClass.empty()?"null":currentClass);
+        This.type=(currentClass.empty()?"NullType":currentClass);
         localVars["this"]=This;
         maximumTotalLocalVarSize=currentTotalLocalVarSize=localVars.size();
 
@@ -1203,7 +1207,8 @@ int main(int argc, char** argv){
     initExpressionParsingModule();
 
     types["int"]=Type();
-    types["null"]=Type();
+    types["NullType"]=Type();
+    types["Function"]=Type();
     auto object_type=Type();
     object_type.fields["class"]= Variable(0,"Class");
     types["Object"]=object_type;
