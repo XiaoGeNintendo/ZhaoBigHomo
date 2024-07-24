@@ -358,6 +358,15 @@ string FetchAddressExpression::compile(vector<Operation> &ops, int putAt){
 }
 
 string FunctionExpression::compile(vector<Operation> &ops, int putAt){
+    /*
+     * FunctionExpression will assume putAt+1 is the location to call the function
+     * and putAt+2 is the location of "this".
+     * Usually, in ValueExpression, we should copy THIS_LOCATION to putAt+2
+     * and in DotExpression we already have putAt+2 = "this"
+     *
+     * However in other expressions like +/- we cannot ensure this fact. In this case, the behaviour will be weird.
+     */
+
     string type_name=call->compile(ops,putAt+1);
 
     if(type_name.substr(0,8)!="Function"){
@@ -390,7 +399,7 @@ string FunctionExpression::compile(vector<Operation> &ops, int putAt){
     ensureSameType(found_type,type_name);
 
     //copy "this"
-    ops.emplace_back(gGetStack(TEMP+2,THIS_LOCATION));
+    ops.emplace_back(gGetStack(TEMP+2,putAt+2));
 
     //copy parameters
     int nowAt=3;
@@ -446,7 +455,9 @@ string ValueExpression::compile(vector<Operation> &ops, int putAt) {
 
             return types[currentClass].fields[token.value].type;
         }else if(!currentClass.empty() && types[currentClass].functions.count(token.value)){
-            //it's a method
+            //it's a method needs to set this location. See FunctionExpression
+            ops.emplace_back(gGetStack(TEMP,THIS_LOCATION));
+            ops.emplace_back(gSetStack(TEMP,putAt+1));
             ops.emplace_back(gSet(TEMP,types[currentClass].functions[token.value].first.startLocation));
             ops.emplace_back(gSetStack(TEMP,putAt));
 
