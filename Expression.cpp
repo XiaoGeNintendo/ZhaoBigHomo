@@ -51,6 +51,7 @@ UnaryExpression::~UnaryExpression() {
 }
 
 FunctionExpression::~FunctionExpression(){
+    delete call;
     for(auto t:parameters){
         delete t;
     }

@@ -36,12 +36,12 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
 }
 
 inline void fail(const string& msg,int err=CUSTOM_FAIL){
-    cerr<<"Error: [Line "<<lexer.line<<"] "<<msg<<endl;
+    cerr<<"Error: ["<<lexer.file<<" Line "<<lexer.line<<"] "<<msg<<endl;
     exit(err);
 }
 
 inline void warn(const string& msg){
-    cerr<<"Warning: [Line "<<lexer.line<<"] "<<msg<<endl;
+    cerr<<"Warning: ["<<lexer.file<<" Line "<<lexer.line<<"] "<<msg<<endl;
 }
 
 inline void ensure(const Token& token, int tokenType){
@@ -1239,7 +1239,7 @@ bool compileStatement(){
 
 int main(int argc, char** argv){
     if(argc<2){
-        cerr<<"Usage: "<<argv[0]<<" <input file> <output file>"<<endl;
+        cerr<<"Usage: "<<argv[0]<<" <input file1> [input file2] [input file3] ... <output file>"<<endl;
         exit(1);
     }
 
@@ -1252,15 +1252,22 @@ int main(int argc, char** argv){
     object_type.fields["class"]= Variable(0,"Object");
     types["Object"]=object_type;
 
-    lexer.open(argv[1]);
-    outStream=ofstream(argv[2]);
     output.emplace_back(gSet(1,1));
     output.emplace_back(gSet(STACK_START,STACK_START+TEMP_VAR_COUNT));
-    while(true){
-        bool res=compileStatement();
-        if(!res){
-            break;
+
+    outStream=ofstream(argv[argc-1]);
+
+    for(int i=1;i<argc-1;i++) {
+        cout<<"Compiling file: "<<argv[i]<<endl;
+        lexer=Lexer();
+        lexer.open(argv[i]);
+        while (true) {
+            bool res = compileStatement();
+            if (!res) {
+                break;
+            }
         }
+        lexer.close();
     }
 
     if(!functions.count("main")){
@@ -1289,6 +1296,5 @@ int main(int argc, char** argv){
         count++;
     }
     outStream.close();
-    lexer.close();
     cout<<"Compile Success in "<<1.0*clock()/CLOCKS_PER_SEC<<" seconds"<<endl;
 }
