@@ -86,6 +86,15 @@ public:
     ~UnaryExpression() override;
 };
 
+class NewExpression:public Expression{
+public:
+    Token clz;
+
+    explicit NewExpression(Token clz):clz(clz){}
+    string compile(vector<Operation> &ops, int putAt) override;
+
+};
+
 class FetchAddressExpression:public Expression{
 public:
     Expression* right;

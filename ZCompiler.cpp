@@ -147,26 +147,59 @@ vector<int> returnPostProcess;
 //============================================================Type related thingy
 
 /**
- * Ensure expect is of any super class of found
+ * Returns whether found is a subclass of expect (Single types)
  * @param found
  * @param expect
+ * @return
  */
-inline void ensureSameType(const string& found, const string& expect){
+bool isCompatibleSingleType(const string& found, const string& expect){
     if(found==expect){
-        return;
+        return true;
     }
     string type=found;
     while(!type.empty()){
         if(type==expect){
-            return;
+            return true;
         }
         if(!types.count(type)){
             break;
         }
         type=types[type].super;
     }
+    return false;
+}
 
-    warn("Type mismatch: Expected "+expect+" but found "+found);
+/**
+ * Returns whether ALL underlying types of found are a subclass of expect (Compound types)
+ * @param found
+ * @param expect
+ * @return
+ */
+bool isCompatibleType(const string& found, const string& expect){
+    auto f=split(found,'#');
+    auto e=split(expect,'#');
+
+    if(f.size()!=e.size()){
+        return false;
+    }
+
+    for(int i=0;i<f.size();i++){
+        if(!isCompatibleSingleType(f[i],e[i])){
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Ensure expect is of any super class of found
+ * @param found
+ * @param expect
+ */
+inline void ensureSameType(const string& found, const string& expect) {
+    if (!isCompatibleType(found, expect)) {
+        warn("Type mismatch: Expected " + expect + " but found " + found);
+    }
 }
 
 int Type::getSize() {
@@ -178,15 +211,11 @@ int Type::getSize() {
 }
 
 string getMethodSignature(const vector<pair<string,string>>& parameters, const string& retType){
-    string ans="Function(";
+    string ans="Function#";
     for(auto pair:parameters){
-        if(pair.second=="int"){
-            ans+="I";
-        }else {
-            ans += "L" + pair.second + ";";
-        }
+        ans+=pair.second+"#";
     }
-    ans+=")"+(retType=="int"?"I":"L"+retType+";");
+    ans+=retType;
     return ans;
 }
 
@@ -386,25 +415,17 @@ string FunctionExpression::compile(vector<Operation> &ops, int putAt){
      */
 
     string type_name=call->compile(ops,putAt+1);
+    auto splitResult=split(type_name,'#');
 
-    if(type_name.substr(0,8)!="Function"){
+    if(splitResult[0]!="Function"){
         fail(type_name+" is not callable.");
     }
-
-    auto splitResult=split(type_name,')');
     string retType;
     if(splitResult.size()>=2){
-        retType=splitResult[1];
+        retType=splitResult.back();
     }else{
         retType="?";
-        type_name="Function(?)?";
-    }
-
-    if(retType.back()==';'){
-        //a complex type
-        retType=retType.substr(1,retType.size()-2);
-    }else{
-        retType="int";
+        type_name="Function?";
     }
 
     //calculate parameters
@@ -607,6 +628,27 @@ string UnaryExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
     return left->compile(ops,putAt);
 }
 
+string NewExpression::compile(vector<Operation> &ops, int putAt) {
+    if(!types.count(clz.value)){
+        throwUndefined(clz.value,"new object");
+    }
+    if(!globalVars.count(clz.value)){
+        fail(clz.value+" is not instantiable because it lacks a global class pointer.");
+    }
+
+    auto f=new FunctionExpression(new ValueExpression(Token(IDENTIFIER,"__new")),
+                                  {
+                                    new ValueExpression(Token(INTEGER, to_string(types[clz.value].getSize()))),
+                                    new ValueExpression(Token(IDENTIFIER,clz.value))
+                                  });
+    f->compile(ops,putAt);
+    delete f;
+
+    //set class
+    ops.emplace_back(gArraySet(globalVars[clz.value].offset+GLOBAL_START,0,TEMP));
+    return clz.value;
+}
+
 vector<ExpressionLayerLogic> logics;
 
 Expression* compileExpression(int layer);
@@ -678,6 +720,20 @@ void initExpressionParsingModule(){
         return compileExpression(layer+1);
     };
 
+    ExpressionLayerLogic layerNew=ExpressionLayerLogic();
+    layerNew.isSpecialLayer=true;
+    layerNew.specialOp=[](int layer)->Expression*{
+        auto first=lexer.scryToken();
+        if(first.value=="new"){
+            lexer.getToken();
+            auto type=lexer.getToken();
+            ensureNext("(");
+            ensureNext(")");
+            return new NewExpression(type);
+        }
+        return compileExpression(layer+1);
+    };
+
     ExpressionLayerLogic layerAddressFunction=ExpressionLayerLogic(); //layer for address
     layerAddressFunction.isSpecialLayer=true;
     layerAddressFunction.specialOp=[](int layer)->Expression*{
@@ -743,7 +799,7 @@ void initExpressionParsingModule(){
         }
     };
 
-    logics={layerEqual,layerTrinary,layerLogicalOr,layerLogicalAnd,layerLogicalNot, layerLogical,layerPlusMinus,layerMultipleDivide,layerUnary,layerAddressFunction,layerDots,layerStuff};
+    logics={layerEqual, layerTrinary, layerLogicalOr, layerLogicalAnd, layerLogicalNot, layerLogical, layerPlusMinus, layerMultipleDivide, layerUnary, layerNew, layerAddressFunction, layerDots, layerStuff};
 }
 
 Expression* compileExpression(int layer){
@@ -925,6 +981,10 @@ bool compileStatement(){
 
         //give it a default value
         if(lexer.scryToken().value=="="){
+            if(!currentClass.empty()){
+                warn("'=' will not be executed in class fields.");
+            }
+
             lexer.getToken();
             string rightType=compileExpression();
 
@@ -1193,7 +1253,7 @@ bool compileStatement(){
         }
         //check super class availability
         if(types[currentClass].super=="int"){
-            fail("Primitive types (namely, 'int') is not allowed as super class.");
+            fail("Primitive types (namely, 'int') are not allowed as super class.");
         }
         if(!types.count(types[currentClass].super)){
             throwUndefined(types[currentClass].super,"types (as superclass of "+currentClass+")");
@@ -1215,7 +1275,7 @@ bool compileStatement(){
         types[currentClass].getSize();
 
         //generate vtable
-        globalVars[currentClass] = Variable(globalVarSize,currentClass);
+        globalVars[currentClass] = Variable(globalVarSize,"Class");
         globalVarSize++;
         output.emplace_back(gSet(GLOBAL_START+globalVarSize-1,vtableHead));
         types[currentClass].vtableHead=vtableHead;
@@ -1248,8 +1308,9 @@ int main(int argc, char** argv){
     types["int"]=Type();
     types["NullType"]=Type();
     types["Function"]=Type();
+    types["Class"]=Type();
     auto object_type=Type();
-    object_type.fields["class"]= Variable(0,"Object");
+    object_type.fields["class"]= Variable(0,"Class");
     types["Object"]=object_type;
 
     output.emplace_back(gSet(1,1));
