@@ -1,0 +1,33 @@
+class AbstractMessage{
+    def getValue();
+}
+
+class Message:AbstractMessage{
+    var value;
+
+    def getValue(){
+        return value;
+    }
+}
+
+class Mul2Decorator:AbstractMessage{
+    var son:AbstractMessage;
+
+    def getValue(){
+        return son.getValue()*2;
+    }
+}
+
+def main(){
+    var myMsg=new Message();
+    myMsg.value=114514;
+
+    var mul=new Mul2Decorator();
+    mul.son=myMsg;
+
+    output myMsg.getValue();
+    output mul.getValue();
+
+    delete(myMsg);
+    delete(mul);
+}
