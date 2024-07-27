@@ -12,6 +12,7 @@ Maybe just let CMake do its job? IDK.
 - ✔️ OOP support with the ability to change the class of any object during runtime! Why not release the full power of vtables?
 - ✔️ Too many ways to write code that works not as intended! Time to write code that only you know the meaning!
 - ✔️ All type-checks are warnings! In ZBH, type-safety are just spices, and should not be the main dish.
+- ✔️ Jump to any function, code, or even some random location in the code with ease! It's all about freedom!
 
 # Docs
 To learn and write in ZBH or to know more about the language, please visit [here](https://xgn-1.gitbook.io/zbh-documentation/) .
