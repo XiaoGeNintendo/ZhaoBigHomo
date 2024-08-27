@@ -17,5 +17,3 @@ def main(){
 
     output result;
 }
-
-main();

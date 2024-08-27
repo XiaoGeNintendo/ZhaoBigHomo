@@ -14,5 +14,3 @@ def main(){
     input global_x;
     output jiecheng();
 }
-
-main();

@@ -317,8 +317,11 @@ string BinaryExpression::compile(vector<Operation> &ops, int putAt) {
     string leftType=left->compile(ops,putAt+1);
     string rightType=right->compile(ops,putAt+2);
 
-    ensureSameType(leftType,"int");
-    ensureSameType(rightType,"int");
+    //perform typecheck
+    if(op.value!="==") {
+        ensureSameType(leftType, "int");
+        ensureSameType(rightType, "int");
+    }
 
     ops.emplace_back(gGetStack(TEMP,putAt+1));
     ops.emplace_back(gGetStack(TEMP+1,putAt+2));
@@ -432,7 +435,7 @@ string FunctionExpression::compile(vector<Operation> &ops, int putAt){
     //calculate parameters
     vector<pair<string,string>> pList;
     for(int i=0;i<parameters.size();i++){
-        string givenType=parameters[i]->compile(ops,putAt+2+i);
+        string givenType=parameters[i]->compile(ops,putAt+3+i);
         pList.emplace_back("",givenType);
     }
     string found_type=getMethodSignature(pList,retType);
@@ -444,7 +447,7 @@ string FunctionExpression::compile(vector<Operation> &ops, int putAt){
     //copy parameters
     int nowAt=3;
     for(int i=0;i<parameters.size();i++){
-        ops.emplace_back(gGetStack(TEMP+nowAt,putAt+2+i));
+        ops.emplace_back(gGetStack(TEMP+nowAt,putAt+3+i));
         nowAt++;
     }
 
@@ -803,7 +806,7 @@ void initExpressionParsingModule(){
         }
     };
 
-    logics={layerEqual, layerTrinary, layerLogicalOr, layerLogicalAnd, layerLogicalNot, layerLogical, layerPlusMinus, layerMultipleDivide, layerUnary, layerNew, layerAddressFunction, layerDots, layerStuff};
+    logics={layerEqual, layerTrinary, layerLogicalOr, layerLogicalAnd, layerLogicalNot, layerLogical, layerPlusMinus, layerMultipleDivide, layerUnary, layerAddressFunction, layerDots, layerNew, layerStuff};
 }
 
 Expression* compileExpression(int layer){
