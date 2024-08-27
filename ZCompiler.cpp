@@ -246,6 +246,7 @@ string Function::getMethodSignature() const {
 string Expression::compileAsLvalue(vector<Operation> &ops, int putAt) {
     throwNotLvalue();
     assert(false);
+    return "ERROR";
 }
 
 string TrinaryExpression::compile(vector<Operation> &ops, int putAt) {
@@ -523,6 +524,7 @@ string ValueExpression::compile(vector<Operation> &ops, int putAt) {
     }
 
     assert(false);
+    return "ERROR";
 }
 
 string ValueExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
@@ -590,6 +592,7 @@ string DotExpression::compile(vector<Operation> &ops, int putAt) {
     }
 
     assert(false);
+    return "ERROR";
 }
 
 string DotExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
@@ -619,6 +622,7 @@ string DotExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
     }
 
     assert(false);
+    return "ERROR";
 }
 
 string UnaryExpression::compileAsLvalue(vector<Operation> &ops, int putAt) {
@@ -972,11 +976,12 @@ bool compileStatement(){
             if(!localVarStack.empty()) {
                 localVarStack.back().push_back(varName.value);
             }
-
+#ifdef DEBUG_MODE
             cout<<"Variable definition: "<<varName.value<<" in "<<currentFunction
                 <<" assigned to "<<localVars[varName.value].offset
                 <<" Mem usage:"<<currentTotalLocalVarSize<<"/"<<maximumTotalLocalVarSize
                 <<" Type:"<<localVars[varName.value].type<<endl;
+#endif
         }
 
         //give it a default value
@@ -1283,8 +1288,9 @@ bool compileStatement(){
             output.emplace_back(gSet(vtableHead+func.second.second,func.second.first.startLocation));
         }
         vtableHead+=types[currentClass].functions.size();
+#ifdef DEBUG_MODE
         cout<<"New class: "<<currentClass<<" of size "<<types[currentClass].getSize()<<" defined at "<<types[currentClass].vtableHead<<". Use breakpoint to see detail."<<endl;
-
+#endif
         currentClass="";
 
     }else{
@@ -1353,7 +1359,9 @@ int main(int argc, char** argv){
         }
         outStream<<endl;
 
+#ifdef DEBUG_MODE
         cout<<count<<"\t"<<t<<endl;
+#endif
         count++;
     }
     outStream.close();

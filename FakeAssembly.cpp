@@ -10,7 +10,7 @@ vector<Operation> ops;
 int MEM[1000006];
 ifstream ins;
 
-inline int read(){
+int read(){
     int x;
     ins>>x;
     return x;
@@ -19,7 +19,7 @@ inline int read(){
 int main(int argc, char** argv){
 
     if(argc<2){
-        cerr<<"Usage: "<<argv[0]<<" <input file> <output file>"<<endl;
+        cerr<<"Usage: "<<argv[0]<<" <program file> <output file>"<<endl;
         return 1;
     }
     if(argc>2){
@@ -28,8 +28,8 @@ int main(int argc, char** argv){
 
     ins=ifstream(argv[1]);
 
-    while(!ins.eof()){
-        int opcode=read();
+    int opcode;
+    while(ins>>opcode){
         int operandCount=getOperandCount(opcode);
         if(operandCount == 0){
             ops.emplace_back(opcode);
@@ -47,6 +47,7 @@ int main(int argc, char** argv){
         }
     }
 
+#ifdef DEBUG_MODE
     cerr<<"Read Code Succeed. LOC="<<ops.size()<<endl;
 
     int count=0;
@@ -54,6 +55,7 @@ int main(int argc, char** argv){
         cerr<<count<<"\t"<<t<<endl;
         count++;
     }
+#endif
 
     //time to execute
     int pt=0;
@@ -143,6 +145,8 @@ int main(int argc, char** argv){
         }
     }
 
+#ifdef DEBUG_MODE
     cout<<"Total instructions run: "<<codeCount<<endl;
+#endif
     return 0;
 }

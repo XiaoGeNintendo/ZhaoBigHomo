@@ -59,6 +59,7 @@ Token Lexer::_getToken(){
         return {ENDOFFILE,""};
     }
     assert(false);
+    return {};
 }
 
 Token Lexer::getToken() {
