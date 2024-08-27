@@ -1307,7 +1307,7 @@ bool compileStatement(){
 }
 
 int main(int argc, char** argv){
-    if(argc<2){
+    if(argc<=2){
         cerr<<"Usage: "<<argv[0]<<" <input file1> [input file2] [input file3] ... <output file>"<<endl;
         exit(1);
     }
